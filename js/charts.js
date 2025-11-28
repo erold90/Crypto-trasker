@@ -1,0 +1,466 @@
+// ============================================
+// CRYPTO PORTFOLIO TRACKER - CHARTS MODULE
+// ============================================
+
+const Charts = {
+    mainChart: null,
+    allocationChart: null,
+    showBtcComparison: false,
+    
+    // Initialize charts
+    init() {
+        // Do NOT register datalabels globally - we'll use it only for allocation chart
+        
+        // Bind BTC toggle
+        const btcToggle = document.getElementById('btcCompareToggle');
+        if (btcToggle) {
+            btcToggle.addEventListener('change', (e) => {
+                this.showBtcComparison = e.target.checked;
+                this.renderMain();
+            });
+        }
+    },
+    
+    // Get BTC comparison data (normalized to portfolio start value)
+    getBtcComparisonData(portfolioHistory) {
+        if (!portfolioHistory.length) return null;
+        
+        const btcHistory = state.history['BTC'];
+        if (!btcHistory || !btcHistory.length) return null;
+        
+        // Get the starting portfolio value
+        const startValue = portfolioHistory[0].value;
+        
+        // Find the BTC starting index that matches portfolio start
+        const portfolioStartTime = portfolioHistory[0].time;
+        
+        // Calculate what the portfolio would be worth if invested 100% in BTC
+        const limit = state.timeRange === 0 ? btcHistory.length : Math.min(state.timeRange, btcHistory.length);
+        const startIdx = btcHistory.length - limit;
+        
+        const btcStartPrice = btcHistory[startIdx]?.close || 1;
+        const conversionRate = state.currency === 'EUR' ? Portfolio.getConversionRate() : 1;
+        
+        // Calculate normalized BTC values
+        const btcData = [];
+        for (let i = startIdx; i < btcHistory.length; i++) {
+            const btcPrice = btcHistory[i].close * conversionRate;
+            const normalizedValue = (btcPrice / (btcStartPrice * conversionRate)) * startValue;
+            btcData.push(normalizedValue);
+        }
+        
+        return btcData;
+    },
+    
+    // Render main portfolio chart
+    renderMain() {
+        const canvas = document.getElementById('mainChart');
+        if (!canvas) return;
+        
+        const ctx = canvas.getContext('2d');
+        const history = Portfolio.getPortfolioHistory();
+        
+        if (!history.length) return;
+        
+        // Prepare data
+        const labels = history.map(h => h.time);
+        const values = history.map(h => h.value);
+        
+        // Get transaction markers
+        const transactions = Portfolio.getTransactionMarkers();
+        const txDates = new Set(transactions.map(t => t.date));
+        
+        // Point styling for transaction markers
+        const pointColors = [];
+        const pointRadii = [];
+        const pointBorders = [];
+        
+        history.forEach(h => {
+            const dateStr = new Date(h.time).toISOString().split('T')[0];
+            const txOnDay = transactions.filter(t => t.date === dateStr);
+            
+            if (txOnDay.length > 0) {
+                pointColors.push(txOnDay[0].color);
+                pointRadii.push(8);
+                pointBorders.push('#ffffff');
+            } else {
+                pointColors.push('transparent');
+                pointRadii.push(0);
+                pointBorders.push('transparent');
+            }
+        });
+        
+        // Calculate invested line
+        const invested = Portfolio.getTotalInvested();
+        const investedLine = values.map(() => invested);
+        
+        // Prepare datasets
+        const datasets = [
+            {
+                label: 'Valore Portfolio',
+                data: values,
+                borderColor: '#0088FF',
+                backgroundColor: this.createGradient(ctx, 'rgba(0, 136, 255, 0.3)', 'rgba(0, 136, 255, 0.0)'),
+                fill: true,
+                tension: 0.4,
+                borderWidth: 3,
+                pointBackgroundColor: pointColors,
+                pointRadius: pointRadii,
+                pointBorderColor: pointBorders,
+                pointBorderWidth: 2,
+                pointHoverRadius: 10,
+                order: 1
+            },
+            {
+                label: 'Capitale Investito',
+                data: investedLine,
+                borderColor: 'rgba(255, 255, 255, 0.3)',
+                borderDash: [8, 4],
+                borderWidth: 2,
+                fill: false,
+                pointRadius: 0,
+                tension: 0,
+                order: 3
+            }
+        ];
+        
+        // Add BTC comparison line if enabled
+        if (this.showBtcComparison) {
+            const btcData = this.getBtcComparisonData(history);
+            if (btcData) {
+                datasets.push({
+                    label: 'Se avessi comprato BTC',
+                    data: btcData,
+                    borderColor: '#F7931A',
+                    backgroundColor: 'transparent',
+                    fill: false,
+                    tension: 0.4,
+                    borderWidth: 2,
+                    borderDash: [5, 5],
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
+                    order: 2
+                });
+            }
+        }
+        
+        // Destroy existing chart
+        if (this.mainChart) {
+            this.mainChart.destroy();
+        }
+        
+        const sym = state.currency === 'EUR' ? '€' : '$';
+        
+        this.mainChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels,
+                datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    intersect: false,
+                    mode: 'index'
+                },
+                plugins: {
+                    legend: {
+                        display: this.showBtcComparison,
+                        position: 'top',
+                        align: 'end',
+                        labels: {
+                            color: '#94a3b8',
+                            usePointStyle: true,
+                            pointStyle: 'line',
+                            padding: 20,
+                            font: {
+                                family: "'Outfit', sans-serif",
+                                size: 12
+                            },
+                            filter: (item) => item.text !== 'Capitale Investito'
+                        }
+                    },
+                    datalabels: {
+                        display: false
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(15, 20, 30, 0.95)',
+                        titleColor: '#ffffff',
+                        bodyColor: '#94a3b8',
+                        borderColor: 'rgba(255, 255, 255, 0.1)',
+                        borderWidth: 1,
+                        padding: 16,
+                        displayColors: true,
+                        callbacks: {
+                            title: (ctx) => {
+                                const date = new Date(ctx[0].parsed.x);
+                                return date.toLocaleDateString('it-IT', {
+                                    weekday: 'long',
+                                    year: 'numeric',
+                                    month: 'long',
+                                    day: 'numeric'
+                                });
+                            },
+                            label: (ctx) => {
+                                const value = ctx.raw.toLocaleString('it-IT', { maximumFractionDigits: 0 });
+                                
+                                if (ctx.datasetIndex === 0) {
+                                    return ` Portfolio: ${sym}${value}`;
+                                }
+                                if (ctx.dataset.label === 'Se avessi comprato BTC') {
+                                    return ` BTC: ${sym}${value}`;
+                                }
+                                if (ctx.dataset.label === 'Capitale Investito') {
+                                    return ` Investito: ${sym}${value}`;
+                                }
+                                return ` ${ctx.dataset.label}: ${sym}${value}`;
+                            },
+                            afterBody: (ctx) => {
+                                if (!this.showBtcComparison) return '';
+                                
+                                const portfolioValue = ctx[0]?.raw || 0;
+                                const btcDataset = ctx.find(c => c.dataset.label === 'Se avessi comprato BTC');
+                                const btcValue = btcDataset?.raw || 0;
+                                
+                                if (btcValue > 0 && portfolioValue > 0) {
+                                    const diff = portfolioValue - btcValue;
+                                    const diffPct = ((portfolioValue / btcValue) - 1) * 100;
+                                    const winning = diff >= 0;
+                                    
+                                    return `\n${winning ? '🏆' : '📉'} ${winning ? 'Stai battendo' : 'BTC ti batte di'} ${winning ? '+' : ''}${diffPct.toFixed(1)}%`;
+                                }
+                                return '';
+                            },
+                            afterLabel: (ctx) => {
+                                if (ctx.datasetIndex !== 0) return '';
+                                
+                                const dateStr = new Date(ctx.parsed.x).toISOString().split('T')[0];
+                                const txs = transactions.filter(tx => tx.date === dateStr);
+                                
+                                if (txs.length > 0) {
+                                    return txs.map(tx => 
+                                        `📍 ${tx.type} ${tx.symbol}: ${tx.qty.toLocaleString()}`
+                                    ).join('\n');
+                                }
+                                return '';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: {
+                            unit: state.timeRange <= 30 ? 'day' : 
+                                  state.timeRange <= 90 ? 'week' : 'month',
+                            displayFormats: {
+                                day: 'd MMM',
+                                week: 'd MMM',
+                                month: 'MMM yyyy'
+                            }
+                        },
+                        grid: {
+                            display: false
+                        },
+                        ticks: {
+                            color: '#64748b',
+                            font: {
+                                family: "'JetBrains Mono', monospace",
+                                size: 11
+                            }
+                        }
+                    },
+                    y: {
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.05)'
+                        },
+                        ticks: {
+                            color: '#64748b',
+                            font: {
+                                family: "'JetBrains Mono', monospace",
+                                size: 11
+                            },
+                            callback: (val) => `${sym}${(val / 1000).toFixed(0)}K`
+                        }
+                    }
+                }
+            }
+        });
+        
+        // Update comparison stats
+        this.updateComparisonStats(history);
+    },
+    
+    // Create gradient helper
+    createGradient(ctx, colorStart, colorEnd) {
+        const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+        gradient.addColorStop(0, colorStart);
+        gradient.addColorStop(1, colorEnd);
+        return gradient;
+    },
+    
+    // Update comparison statistics
+    updateComparisonStats(portfolioHistory) {
+        const statsContainer = document.getElementById('btcCompareStats');
+        if (!statsContainer) return;
+        
+        if (!this.showBtcComparison || !portfolioHistory.length) {
+            statsContainer.style.display = 'none';
+            return;
+        }
+        
+        const btcData = this.getBtcComparisonData(portfolioHistory);
+        if (!btcData || !btcData.length) {
+            statsContainer.style.display = 'none';
+            return;
+        }
+        
+        const currentPortfolio = portfolioHistory[portfolioHistory.length - 1].value;
+        const currentBtc = btcData[btcData.length - 1];
+        const startValue = portfolioHistory[0].value;
+        
+        const portfolioGain = ((currentPortfolio / startValue) - 1) * 100;
+        const btcGain = ((currentBtc / startValue) - 1) * 100;
+        const difference = portfolioGain - btcGain;
+        const winning = difference >= 0;
+        
+        const sym = state.currency === 'EUR' ? '€' : '$';
+        
+        statsContainer.style.display = 'flex';
+        statsContainer.innerHTML = `
+            <div class="compare-stat">
+                <span class="compare-label">Il tuo Portfolio</span>
+                <span class="compare-value ${portfolioGain >= 0 ? 'positive' : 'negative'}">
+                    ${portfolioGain >= 0 ? '+' : ''}${portfolioGain.toFixed(1)}%
+                </span>
+            </div>
+            <div class="compare-vs">VS</div>
+            <div class="compare-stat">
+                <span class="compare-label">100% Bitcoin</span>
+                <span class="compare-value ${btcGain >= 0 ? 'positive' : 'negative'}" style="color: #F7931A">
+                    ${btcGain >= 0 ? '+' : ''}${btcGain.toFixed(1)}%
+                </span>
+            </div>
+            <div class="compare-result ${winning ? 'winning' : 'losing'}">
+                <span class="compare-icon">${winning ? '🏆' : '📉'}</span>
+                <span class="compare-diff">${winning ? '+' : ''}${difference.toFixed(1)}%</span>
+            </div>
+        `;
+    },
+    
+    // Render allocation donut chart
+    renderAllocation() {
+        const canvas = document.getElementById('allocationChart');
+        if (!canvas) return;
+        
+        const ctx = canvas.getContext('2d');
+        const allocation = Portfolio.getAllocation();
+        
+        if (!allocation.length) return;
+        
+        // Prepare data
+        const labels = allocation.map(a => a.symbol);
+        const values = allocation.map(a => a.value);
+        const colors = allocation.map(a => a.color);
+        
+        // Destroy existing chart
+        if (this.allocationChart) {
+            this.allocationChart.destroy();
+        }
+        
+        const sym = state.currency === 'EUR' ? '€' : '$';
+        
+        this.allocationChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels,
+                datasets: [{
+                    data: values,
+                    backgroundColor: colors,
+                    borderWidth: 0,
+                    hoverOffset: 10,
+                    spacing: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '70%',
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(15, 20, 30, 0.95)',
+                        titleColor: '#ffffff',
+                        bodyColor: '#94a3b8',
+                        borderColor: 'rgba(255, 255, 255, 0.1)',
+                        borderWidth: 1,
+                        padding: 12,
+                        callbacks: {
+                            label: (ctx) => {
+                                const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                                const pct = ((ctx.raw / total) * 100).toFixed(1);
+                                return `${sym}${ctx.raw.toLocaleString('it-IT', { maximumFractionDigits: 0 })} (${pct}%)`;
+                            }
+                        }
+                    },
+                    datalabels: {
+                        color: '#ffffff',
+                        font: {
+                            family: "'JetBrains Mono', monospace",
+                            weight: 'bold',
+                            size: 12
+                        },
+                        formatter: (value, ctx) => {
+                            const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                            const pct = (value / total) * 100;
+                            return pct >= 5 ? `${pct.toFixed(0)}%` : '';
+                        }
+                    }
+                }
+            },
+            plugins: typeof ChartDataLabels !== 'undefined' ? [ChartDataLabels] : []
+        });
+        
+        // Render allocation list
+        this.renderAllocationList(allocation);
+    },
+    
+    // Render allocation list below chart
+    renderAllocationList(allocation) {
+        const container = document.getElementById('allocationList');
+        if (!container) return;
+        
+        const sym = state.currency === 'EUR' ? '€' : '$';
+        
+        container.innerHTML = allocation.map(a => `
+            <div class="allocation-item">
+                <div class="allocation-info">
+                    <div class="allocation-dot" style="background: ${a.color}"></div>
+                    <span class="allocation-name">${a.symbol}</span>
+                </div>
+                <div class="allocation-values">
+                    <span class="allocation-value">${sym}${a.value.toLocaleString('it-IT', { maximumFractionDigits: 0 })}</span>
+                    <span class="allocation-pct">${a.pct.toFixed(1)}%</span>
+                </div>
+            </div>
+        `).join('');
+    },
+    
+    // Set time range
+    setTimeRange(days) {
+        state.timeRange = days;
+        
+        // Update buttons
+        document.querySelectorAll('.chart-range-btn').forEach(btn => {
+            btn.classList.toggle('active', parseInt(btn.dataset.range) === days);
+        });
+        
+        this.renderMain();
+    }
+};
+
+// Export
+window.Charts = Charts;
