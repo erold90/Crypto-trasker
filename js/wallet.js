@@ -13,6 +13,9 @@ const Wallet = {
         XDC: ''
     },
 
+    // Last sync timestamp
+    lastSync: null,
+
     // API endpoints
     APIS: {
         XRP: 'https://xrplcluster.com',
@@ -33,6 +36,7 @@ const Wallet = {
     // Initialize wallet module
     init() {
         this.loadAddresses();
+        this.loadLastSync();
     },
 
     // Load addresses from localStorage or defaults
@@ -266,6 +270,10 @@ const Wallet = {
             savePortfolio();
         }
 
+        // Update last sync timestamp
+        this.lastSync = new Date();
+        this.saveLastSync();
+
         return results;
     },
 
@@ -314,6 +322,52 @@ const Wallet = {
             };
         }
         return status;
+    },
+
+    // Save last sync timestamp to localStorage
+    saveLastSync() {
+        if (this.lastSync) {
+            localStorage.setItem('cpt_last_sync_v1', this.lastSync.toISOString());
+        }
+    },
+
+    // Load last sync timestamp from localStorage
+    loadLastSync() {
+        try {
+            const saved = localStorage.getItem('cpt_last_sync_v1');
+            if (saved) {
+                this.lastSync = new Date(saved);
+            }
+        } catch (e) {
+            console.error('Error loading last sync:', e);
+        }
+    },
+
+    // Get formatted last sync time (e.g., "5 min fa")
+    getLastSyncFormatted() {
+        if (!this.lastSync) return 'Mai sincronizzato';
+
+        const now = new Date();
+        const diffMs = now - this.lastSync;
+        const diffSec = Math.floor(diffMs / 1000);
+        const diffMin = Math.floor(diffSec / 60);
+        const diffHours = Math.floor(diffMin / 60);
+
+        if (diffSec < 60) return 'Adesso';
+        if (diffMin < 60) return `${diffMin} min fa`;
+        if (diffHours < 24) return `${diffHours} ore fa`;
+
+        return this.lastSync.toLocaleDateString('it-IT', {
+            day: '2-digit',
+            month: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    },
+
+    // Check if any wallet is configured
+    hasAnyWallet() {
+        return state.portfolio.some(asset => this.hasWallet(asset.symbol));
     }
 };
 
