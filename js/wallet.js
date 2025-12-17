@@ -24,6 +24,9 @@ const Wallet = {
     // QNT token contract address on Ethereum
     QNT_CONTRACT: '0x4a220E6096B25EADb88358cb44068A3248254675',
 
+    // Etherscan API key (free tier: 5 calls/sec, 100k calls/day)
+    ETHERSCAN_API_KEY: 'X5NADVXS5711WTDXEQIAY34WJ1HXAGA5FE',
+
     // psXDC token contract address (Prime Staked XDC - liquid staking)
     PSXDC_CONTRACT: '0x9B8e12b0BAC165B86967E771d98B520Ec3F665A6',
 
@@ -107,8 +110,8 @@ const Wallet = {
         if (!address) return null;
 
         try {
-            // Using Etherscan API (free tier, limited requests)
-            const url = `${this.APIS.ETHEREUM}?module=account&action=tokenbalance&contractaddress=${this.QNT_CONTRACT}&address=${address}&tag=latest`;
+            // Using Etherscan API with API key
+            const url = `${this.APIS.ETHEREUM}?module=account&action=tokenbalance&contractaddress=${this.QNT_CONTRACT}&address=${address}&tag=latest&apikey=${this.ETHERSCAN_API_KEY}`;
 
             const response = await fetch(url);
             const data = await response.json();
