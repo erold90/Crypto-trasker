@@ -16,7 +16,7 @@ const Wallet = {
     // API endpoints
     APIS: {
         XRP: 'https://xrplcluster.com',
-        ETHEREUM: 'https://api.etherscan.io/api',
+        ETHEREUM: 'https://api.etherscan.io/v2/api',  // V2 API
         HBAR: 'https://mainnet-public.mirrornode.hedera.com',
         XDC: 'https://xdc.blocksscan.io/api'
     },
@@ -110,8 +110,8 @@ const Wallet = {
         if (!address) return null;
 
         try {
-            // Using Etherscan API with API key
-            const url = `${this.APIS.ETHEREUM}?module=account&action=tokenbalance&contractaddress=${this.QNT_CONTRACT}&address=${address}&tag=latest&apikey=${this.ETHERSCAN_API_KEY}`;
+            // Using Etherscan V2 API with chainid=1 (Ethereum mainnet)
+            const url = `${this.APIS.ETHEREUM}?chainid=1&module=account&action=tokenbalance&contractaddress=${this.QNT_CONTRACT}&address=${address}&tag=latest&apikey=${this.ETHERSCAN_API_KEY}`;
 
             const response = await fetch(url);
             const data = await response.json();
