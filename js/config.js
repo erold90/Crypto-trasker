@@ -85,7 +85,16 @@ const CONFIG = {
         PORTFOLIO: 'cpt_portfolio_v1',
         TRANSACTIONS: 'cpt_transactions_v1',
         SETTINGS: 'cpt_settings_v1',
-        TARGETS: 'cpt_targets_v1'
+        TARGETS: 'cpt_targets_v1',
+        WALLETS: 'cpt_wallets_v1'
+    },
+
+    // Default Wallet Addresses
+    DEFAULT_WALLETS: {
+        XRP: 'rLRR1mFDEdYCH5fUgxR6FD3UE9DLsWV7CH',
+        QNT: '0xA64D794A712279DA9f6CC4eafE1C774D7a353eF9',
+        HBAR: '0.0.10081465',
+        XDC: ''  // Da configurare
     },
     
     // Analysis Thresholds
