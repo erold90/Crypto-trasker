@@ -94,7 +94,7 @@ const CONFIG = {
         XRP: 'rLRR1mFDEdYCH5fUgxR6FD3UE9DLsWV7CH',
         QNT: '0xA64D794A712279DA9f6CC4eafE1C774D7a353eF9',
         HBAR: '0.0.10081465',
-        XDC: ''  // Da configurare
+        XDC: '0x5dba231a4dbf07713fe94c6d555c8ebe78a11c8c'  // Include psXDC staking
     },
     
     // Analysis Thresholds

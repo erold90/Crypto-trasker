@@ -24,6 +24,9 @@ const Wallet = {
     // QNT token contract address on Ethereum
     QNT_CONTRACT: '0x4a220E6096B25EADb88358cb44068A3248254675',
 
+    // psXDC token contract address (Prime Staked XDC - liquid staking)
+    PSXDC_CONTRACT: '0x9B8e12b0BAC165B86967E771d98B520Ec3F665A6',
+
     // Initialize wallet module
     init() {
         this.loadAddresses();
@@ -147,7 +150,7 @@ const Wallet = {
         }
     },
 
-    // Fetch XDC balance
+    // Fetch XDC balance (native + psXDC staking)
     async fetchXDCBalance(address) {
         if (!address) return null;
 
@@ -157,18 +160,33 @@ const Wallet = {
                 ? '0x' + address.slice(3)
                 : address;
 
-            const url = `${this.APIS.XDC}?module=account&action=balance&address=${normalizedAddress}`;
-            const response = await fetch(url);
-            const data = await response.json();
+            let totalBalance = 0;
 
-            if (data.status === '1' && data.result) {
-                // XDC has 18 decimals
-                const balance = parseInt(data.result) / Math.pow(10, 18);
-                return balance;
+            // 1. Fetch native XDC balance
+            const nativeUrl = `${this.APIS.XDC}?module=account&action=balance&address=${normalizedAddress}`;
+            const nativeResponse = await fetch(nativeUrl);
+            const nativeData = await nativeResponse.json();
+
+            if (nativeData.status === '1' && nativeData.result) {
+                const nativeBalance = parseInt(nativeData.result) / Math.pow(10, 18);
+                totalBalance += nativeBalance;
+                console.log(`XDC native balance: ${nativeBalance}`);
             }
 
-            console.warn('XDC balance not found:', data);
-            return null;
+            // 2. Fetch psXDC (staked) token balance
+            const tokenUrl = `${this.APIS.XDC}?module=account&action=tokenbalance&contractaddress=${this.PSXDC_CONTRACT}&address=${normalizedAddress}`;
+            const tokenResponse = await fetch(tokenUrl);
+            const tokenData = await tokenResponse.json();
+
+            if (tokenData.status === '1' && tokenData.result) {
+                // psXDC has 18 decimals, 1:1 ratio with XDC
+                const stakedBalance = parseInt(tokenData.result) / Math.pow(10, 18);
+                totalBalance += stakedBalance;
+                console.log(`XDC staked (psXDC) balance: ${stakedBalance}`);
+            }
+
+            console.log(`XDC total balance: ${totalBalance}`);
+            return totalBalance > 0 ? totalBalance : null;
         } catch (e) {
             console.error('Error fetching XDC balance:', e);
             return null;
