@@ -461,6 +461,39 @@ function generateAndSaveHistoricalSnapshots() {
     return true;
 }
 
+// Force regenerate all historical snapshots (call from console)
+function forceRegenerateSnapshots() {
+    console.log('🔄 Forcing snapshot regeneration...');
+    // Clear existing snapshots
+    localStorage.removeItem(CONFIG.STORAGE.HISTORY_SNAPSHOTS);
+    // Regenerate
+    const result = generateAndSaveHistoricalSnapshots();
+    if (result) {
+        console.log('✅ Regeneration complete! Refresh the page to see changes.');
+        // Force chart refresh
+        if (window.Charts) {
+            Charts.renderMain();
+        }
+    } else {
+        console.log('❌ Regeneration failed - check transactions and price history');
+    }
+    return result;
+}
+
+// Debug: show snapshot info
+function debugSnapshots() {
+    const snapshots = loadPortfolioSnapshots();
+    console.log(`Total snapshots: ${snapshots.length}`);
+    if (snapshots.length > 0) {
+        console.log('First 5:', snapshots.slice(0, 5));
+        console.log('Last 5:', snapshots.slice(-5));
+        const generated = snapshots.filter(s => s.generated).length;
+        console.log(`Generated: ${generated}, Real: ${snapshots.length - generated}`);
+    }
+    console.log('Transactions:', state.transactions.length);
+    return snapshots;
+}
+
 // Export
 window.CONFIG = CONFIG;
 window.state = state;
@@ -472,3 +505,5 @@ window.savePortfolioSnapshot = savePortfolioSnapshot;
 window.loadPortfolioSnapshots = loadPortfolioSnapshots;
 window.getPortfolioHistory = getPortfolioHistory;
 window.generateAndSaveHistoricalSnapshots = generateAndSaveHistoricalSnapshots;
+window.forceRegenerateSnapshots = forceRegenerateSnapshots;
+window.debugSnapshots = debugSnapshots;
