@@ -300,6 +300,169 @@ function getPortfolioHistory(days = 30) {
         .sort((a, b) => new Date(a.date) - new Date(b.date));
 }
 
+// Generate historical snapshots from transactions
+// This reconstructs portfolio value history based on actual transaction dates
+function generateHistoricalSnapshots(transactions, priceHistory) {
+    if (!transactions || transactions.length === 0) {
+        console.log('No transactions to generate history from');
+        return [];
+    }
+
+    // Sort transactions by date (oldest first)
+    const sortedTx = [...transactions]
+        .filter(tx => tx.type === 'BUY')
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    if (sortedTx.length === 0) {
+        console.log('No BUY transactions found');
+        return [];
+    }
+
+    // Get the first transaction date
+    const firstTxDate = new Date(sortedTx[0].date);
+    const today = new Date();
+
+    // Build a map of cumulative holdings at each date
+    // { 'YYYY-MM-DD': { XRP: qty, QNT: qty, ... } }
+    const holdingsAtDate = {};
+
+    // Initialize cumulative holdings tracker
+    const cumulativeHoldings = {};
+
+    // Iterate through each day from first transaction to today
+    const currentDate = new Date(firstTxDate);
+    let txIndex = 0;
+
+    while (currentDate <= today) {
+        const dateStr = currentDate.toISOString().split('T')[0];
+
+        // Apply any transactions that happened on this date
+        while (txIndex < sortedTx.length && sortedTx[txIndex].date === dateStr) {
+            const tx = sortedTx[txIndex];
+            const symbol = tx.asset;
+            cumulativeHoldings[symbol] = (cumulativeHoldings[symbol] || 0) + (parseFloat(tx.qty) || 0);
+            txIndex++;
+        }
+
+        // Save holdings for this date
+        holdingsAtDate[dateStr] = { ...cumulativeHoldings };
+
+        // Move to next day
+        currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    // Now calculate portfolio value for each day using price history
+    const snapshots = [];
+    const conversionRate = state.prices['BTC']?.EUR?.PRICE && state.prices['BTC']?.USD?.PRICE
+        ? state.prices['BTC'].EUR.PRICE / state.prices['BTC'].USD.PRICE
+        : 0.92; // Fallback EUR/USD rate
+
+    // Get reference price history (use first asset with history)
+    const symbols = Object.keys(priceHistory);
+    if (symbols.length === 0) {
+        console.log('No price history available');
+        return [];
+    }
+
+    const refHistory = priceHistory[symbols[0]];
+    if (!refHistory || refHistory.length === 0) {
+        console.log('Reference price history is empty');
+        return [];
+    }
+
+    // Iterate through price history days
+    for (let i = 0; i < refHistory.length; i++) {
+        const timestamp = refHistory[i].time * 1000;
+        const dateStr = new Date(timestamp).toISOString().split('T')[0];
+
+        // Get holdings on this date
+        const holdings = holdingsAtDate[dateStr];
+        if (!holdings || Object.keys(holdings).length === 0) {
+            continue; // No holdings yet on this date
+        }
+
+        // Calculate portfolio value
+        let totalValue = 0;
+        let hasValidPrice = false;
+
+        for (const [symbol, qty] of Object.entries(holdings)) {
+            const assetHistory = priceHistory[symbol];
+            if (assetHistory && assetHistory[i]) {
+                const priceUSD = assetHistory[i].close;
+                const priceEUR = priceUSD * conversionRate;
+                totalValue += qty * priceEUR;
+                hasValidPrice = true;
+            }
+        }
+
+        if (hasValidPrice && totalValue > 0) {
+            snapshots.push({
+                date: dateStr,
+                timestamp: timestamp,
+                value: totalValue,
+                invested: 0, // Will calculate separately if needed
+                pnl: 0,
+                currency: 'EUR',
+                generated: true // Mark as generated from transactions
+            });
+        }
+    }
+
+    console.log(`📈 Generated ${snapshots.length} historical snapshots from ${sortedTx.length} transactions`);
+    return snapshots;
+}
+
+// Generate and save historical snapshots
+function generateAndSaveHistoricalSnapshots() {
+    // Use transactions from state and price history from state
+    const transactions = state.transactions;
+    const priceHistory = state.history;
+
+    if (!priceHistory || Object.keys(priceHistory).length === 0) {
+        console.log('Price history not loaded yet');
+        return false;
+    }
+
+    const generatedSnapshots = generateHistoricalSnapshots(transactions, priceHistory);
+
+    if (generatedSnapshots.length === 0) {
+        return false;
+    }
+
+    // Load existing snapshots
+    const existingSnapshots = loadPortfolioSnapshots();
+
+    // Create a map of existing snapshots by date (prefer real snapshots over generated)
+    const snapshotMap = {};
+
+    // First add generated snapshots
+    generatedSnapshots.forEach(s => {
+        snapshotMap[s.date] = s;
+    });
+
+    // Then override with existing real snapshots (they take priority)
+    existingSnapshots.forEach(s => {
+        if (!s.generated) {
+            snapshotMap[s.date] = s;
+        }
+    });
+
+    // Convert back to array and sort
+    const mergedSnapshots = Object.values(snapshotMap)
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    // Keep only last 365 days
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - 365);
+    const filtered = mergedSnapshots.filter(s => new Date(s.date) >= cutoffDate);
+
+    // Save
+    localStorage.setItem(CONFIG.STORAGE.HISTORY_SNAPSHOTS, JSON.stringify(filtered));
+    console.log(`💾 Saved ${filtered.length} total snapshots (${generatedSnapshots.length} generated + existing real)`);
+
+    return true;
+}
+
 // Export
 window.CONFIG = CONFIG;
 window.state = state;
@@ -310,3 +473,4 @@ window.saveSettings = saveSettings;
 window.savePortfolioSnapshot = savePortfolioSnapshot;
 window.loadPortfolioSnapshots = loadPortfolioSnapshots;
 window.getPortfolioHistory = getPortfolioHistory;
+window.generateAndSaveHistoricalSnapshots = generateAndSaveHistoricalSnapshots;
