@@ -15,20 +15,23 @@ const Portfolio = {
         let total = 0;
         state.portfolio.forEach(asset => {
             const price = this.getPrice(asset.symbol);
-            total += asset.qty * price;
+            const qty = parseFloat(asset.qty) || 0;
+            total += qty * price;
         });
         return total;
     },
-    
+
     // Get total invested
     getTotalInvested() {
         let total = 0;
         const rate = this.getConversionRate();
-        
+
         state.portfolio.forEach(asset => {
             // avgPrice is in USD, convert if needed
-            const avgInCurrency = asset.avgPrice * rate;
-            total += asset.qty * avgInCurrency;
+            const qty = parseFloat(asset.qty) || 0;
+            const avgPrice = parseFloat(asset.avgPrice) || 0;
+            const avgInCurrency = avgPrice * rate;
+            total += qty * avgInCurrency;
         });
         return total;
     },
@@ -56,12 +59,13 @@ const Portfolio = {
     // Get allocation data
     getAllocation() {
         const total = this.getTotalValue();
-        
+
         return state.portfolio.map(asset => {
             const price = this.getPrice(asset.symbol);
-            const value = asset.qty * price;
+            const qty = parseFloat(asset.qty) || 0;
+            const value = qty * price;
             const pct = total > 0 ? (value / total) * 100 : 0;
-            
+
             return {
                 symbol: asset.symbol,
                 name: asset.name,
@@ -258,7 +262,8 @@ const Portfolio = {
             state.portfolio.forEach(asset => {
                 const assetHistory = state.history[asset.symbol];
                 if (assetHistory && assetHistory[i]) {
-                    dayValue += assetHistory[i].close * asset.qty;
+                    const qty = parseFloat(asset.qty) || 0;
+                    dayValue += assetHistory[i].close * qty;
                 }
             });
             
