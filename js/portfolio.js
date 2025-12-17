@@ -242,42 +242,59 @@ const Portfolio = {
     },
     
     // Get portfolio history (for chart)
+    // Combines real snapshots (when available) with estimated values (from price history)
     getPortfolioHistory() {
         if (!state.portfolio.length) return [];
-        
+
         const firstAsset = state.portfolio[0];
         const baseHistory = state.history[firstAsset.symbol];
-        
+
         if (!baseHistory) return [];
-        
+
         const limit = state.timeRange === 0 ? baseHistory.length : Math.min(state.timeRange, baseHistory.length);
         const startIdx = baseHistory.length - limit;
-        
+
+        // Load real snapshots and create date-keyed map
+        const snapshots = loadPortfolioSnapshots();
+        const snapshotMap = {};
+        snapshots.forEach(s => {
+            snapshotMap[s.date] = s.value;
+        });
+
         const history = [];
-        
+
         for (let i = startIdx; i < baseHistory.length; i++) {
             const timestamp = baseHistory[i].time * 1000;
+            const dateStr = new Date(timestamp).toISOString().split('T')[0];
+
             let dayValue = 0;
-            
-            state.portfolio.forEach(asset => {
-                const assetHistory = state.history[asset.symbol];
-                if (assetHistory && assetHistory[i]) {
-                    const qty = parseFloat(asset.qty) || 0;
-                    dayValue += assetHistory[i].close * qty;
+
+            // Check if we have a real snapshot for this date
+            if (snapshotMap[dateStr] !== undefined) {
+                // Use real snapshot value
+                dayValue = snapshotMap[dateStr];
+            } else {
+                // Estimate from price history (legacy method)
+                state.portfolio.forEach(asset => {
+                    const assetHistory = state.history[asset.symbol];
+                    if (assetHistory && assetHistory[i]) {
+                        const qty = parseFloat(asset.qty) || 0;
+                        dayValue += assetHistory[i].close * qty;
+                    }
+                });
+
+                // Convert if EUR
+                if (state.currency === 'EUR') {
+                    dayValue *= this.getConversionRate();
                 }
-            });
-            
-            // Convert if EUR
-            if (state.currency === 'EUR') {
-                dayValue *= this.getConversionRate();
             }
-            
+
             history.push({
                 time: timestamp,
                 value: dayValue
             });
         }
-        
+
         return history;
     },
     

@@ -18,12 +18,18 @@ const API = {
             
             // Run analysis after data loaded
             Analysis.runAll();
-            
+
             state.lastUpdate = new Date();
             state.isLoading = false;
-            
+
             // Render UI
             UI.renderAll();
+
+            // Save daily portfolio snapshot for history chart
+            const totalValue = Portfolio.getTotalValue();
+            const totalInvested = Portfolio.getTotalInvested();
+            const pnl = totalValue - totalInvested;
+            savePortfolioSnapshot(totalValue, totalInvested, pnl);
             
         } catch (error) {
             console.error('Error fetching data:', error);
