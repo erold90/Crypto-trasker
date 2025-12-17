@@ -7,23 +7,52 @@ const App = {
     // Initialize application
     async init() {
         console.log('🚀 Crypto Portfolio Tracker starting...');
-        
+
         // Initialize charts
         Charts.init();
-        
+
         // Initialize calculator
         Calculator.init();
-        
+
         // Bind events
         this.bindEvents();
-        
+
         // Fetch initial data
         await API.fetchAll();
-        
+
+        // Auto-sync wallets on startup (if any configured)
+        await this.autoSyncWallets();
+
         // Start auto-refresh
         API.startAutoRefresh();
-        
+
         console.log('✅ App initialized');
+    },
+
+    // Auto-sync wallets on startup
+    async autoSyncWallets() {
+        if (Wallet.hasAnyWallet()) {
+            console.log('🔄 Auto-syncing wallets...');
+            UI.updateSyncStatus('Sincronizzazione...');
+
+            try {
+                const results = await Wallet.syncAll();
+
+                if (results.success.length > 0) {
+                    console.log(`✅ Synced: ${results.success.map(r => r.symbol).join(', ')}`);
+                }
+                if (results.failed.length > 0) {
+                    console.warn(`⚠️ Failed: ${results.failed.join(', ')}`);
+                }
+
+                Analysis.runAll();
+                UI.renderAll();
+            } catch (e) {
+                console.error('Auto-sync error:', e);
+            }
+
+            UI.updateSyncStatus();
+        }
     },
     
     // Bind event listeners
@@ -623,6 +652,21 @@ const UI = {
     // WALLET FUNCTIONS
     // ============================================
 
+    // Update sync status display on button
+    updateSyncStatus(customText = null) {
+        const btn = document.getElementById('syncWalletBtn');
+        if (!btn) return;
+
+        if (customText) {
+            btn.innerHTML = `<span class="icon">⏳</span> ${customText}`;
+            btn.disabled = true;
+        } else {
+            const lastSync = Wallet.getLastSyncFormatted();
+            btn.innerHTML = `<span class="icon">🔗</span> Sync <span class="sync-time">(${lastSync})</span>`;
+            btn.disabled = false;
+        }
+    },
+
     // Show wallet configuration modal
     showWalletModal() {
         const container = document.getElementById('walletConfigList');
@@ -708,6 +752,7 @@ const UI = {
     // Sync all wallets
     async syncAllWallets() {
         this.showToast('Sincronizzazione wallet in corso...', 'info');
+        this.updateSyncStatus('Sincronizzazione...');
 
         const results = await Wallet.syncAll();
 
@@ -728,6 +773,7 @@ const UI = {
 
         Analysis.runAll();
         this.renderAll();
+        this.updateSyncStatus(); // Update button with last sync time
         this.showWalletModal(); // Refresh modal
     }
 };

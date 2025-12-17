@@ -1877,6 +1877,17 @@ tr:hover {
     transform: translateY(-1px);
 }
 
+.btn-wallet:disabled {
+    opacity: 0.7;
+    cursor: wait;
+}
+
+.btn-wallet .sync-time {
+    font-size: 0.75rem;
+    opacity: 0.8;
+    font-weight: 400;
+}
+
 .modal-lg {
     max-width: 700px;
 }
