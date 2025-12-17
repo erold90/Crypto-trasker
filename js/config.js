@@ -494,6 +494,73 @@ function debugSnapshots() {
     return snapshots;
 }
 
+// Show visual debug panel (for mobile)
+function showDebugPanel() {
+    const snapshots = loadPortfolioSnapshots();
+    const generated = snapshots.filter(s => s.generated).length;
+    const real = snapshots.length - generated;
+
+    // Get first and last snapshot info
+    let firstInfo = 'N/A';
+    let lastInfo = 'N/A';
+    if (snapshots.length > 0) {
+        const first = snapshots[0];
+        const last = snapshots[snapshots.length - 1];
+        firstInfo = `${first.date}: €${first.value?.toFixed(0) || 0}`;
+        lastInfo = `${last.date}: €${last.value?.toFixed(0) || 0}`;
+    }
+
+    // Get transaction info
+    const txCount = state.transactions?.length || 0;
+    const buyTx = state.transactions?.filter(t => t.type === 'BUY').length || 0;
+
+    const html = `
+        <div id="debugPanel" style="
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.95);
+            border: 2px solid #0088FF;
+            border-radius: 12px;
+            padding: 16px;
+            z-index: 99999;
+            font-family: monospace;
+            font-size: 12px;
+            color: #fff;
+        ">
+            <div style="display:flex; justify-content:space-between; margin-bottom:12px;">
+                <strong style="color:#0088FF;">📊 Debug Snapshots</strong>
+                <span onclick="document.getElementById('debugPanel').remove()" style="cursor:pointer;">✕</span>
+            </div>
+            <div style="display:grid; gap:8px;">
+                <div><span style="color:#888;">Snapshots totali:</span> <strong>${snapshots.length}</strong></div>
+                <div><span style="color:#888;">Generati:</span> <strong style="color:#00D4AA;">${generated}</strong></div>
+                <div><span style="color:#888;">Reali:</span> <strong style="color:#F7931A;">${real}</strong></div>
+                <div><span style="color:#888;">Primo:</span> <strong>${firstInfo}</strong></div>
+                <div><span style="color:#888;">Ultimo:</span> <strong>${lastInfo}</strong></div>
+                <hr style="border-color:#333;">
+                <div><span style="color:#888;">Transazioni:</span> <strong>${txCount}</strong> (${buyTx} BUY)</div>
+            </div>
+            <div style="margin-top:12px; display:flex; gap:8px;">
+                <button onclick="forceRegenerateSnapshots(); showDebugPanel();" style="
+                    flex:1; padding:10px; background:#0088FF; color:#fff; border:none; border-radius:8px; font-weight:bold;
+                ">🔄 Rigenera</button>
+                <button onclick="document.getElementById('debugPanel').remove();" style="
+                    flex:1; padding:10px; background:#333; color:#fff; border:none; border-radius:8px;
+                ">Chiudi</button>
+            </div>
+        </div>
+    `;
+
+    // Remove existing panel if any
+    const existing = document.getElementById('debugPanel');
+    if (existing) existing.remove();
+
+    // Add new panel
+    document.body.insertAdjacentHTML('beforeend', html);
+}
+
 // Export
 window.CONFIG = CONFIG;
 window.state = state;
@@ -507,3 +574,4 @@ window.getPortfolioHistory = getPortfolioHistory;
 window.generateAndSaveHistoricalSnapshots = generateAndSaveHistoricalSnapshots;
 window.forceRegenerateSnapshots = forceRegenerateSnapshots;
 window.debugSnapshots = debugSnapshots;
+window.showDebugPanel = showDebugPanel;
