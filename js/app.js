@@ -143,7 +143,10 @@ const UI = {
     // Update prices only (for auto-refresh)
     updatePrices() {
         this.updateTimestamp();
-        this.renderAssetTable();
+        // Don't update table while editing to preserve input values
+        if (!state.isEditing) {
+            this.renderAssetTable();
+        }
     },
     
     // Update KPIs only
