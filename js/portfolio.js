@@ -261,11 +261,7 @@ const Portfolio = {
             snapshotMap[s.date] = s.value;
         });
 
-        console.log(`📊 Chart: ${snapshots.length} snapshots loaded, timeRange=${state.timeRange}`);
-
         const history = [];
-        let snapshotHits = 0;
-        let estimatedDays = 0;
 
         for (let i = startIdx; i < baseHistory.length; i++) {
             const timestamp = baseHistory[i].time * 1000;
@@ -277,7 +273,6 @@ const Portfolio = {
             if (snapshotMap[dateStr] !== undefined) {
                 // Use real snapshot value
                 dayValue = snapshotMap[dateStr];
-                snapshotHits++;
             } else {
                 // Estimate from price history (legacy method)
                 state.portfolio.forEach(asset => {
@@ -292,7 +287,6 @@ const Portfolio = {
                 if (state.currency === 'EUR') {
                     dayValue *= this.getConversionRate();
                 }
-                estimatedDays++;
             }
 
             history.push({
@@ -300,8 +294,6 @@ const Portfolio = {
                 value: dayValue
             });
         }
-
-        console.log(`   Snapshot hits: ${snapshotHits}, Estimated days: ${estimatedDays}`);
 
         return history;
     },
