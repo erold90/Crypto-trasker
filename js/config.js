@@ -318,15 +318,14 @@ function generateHistoricalSnapshots(transactions, priceHistory) {
         return [];
     }
 
+    console.log(`📊 Processing ${sortedTx.length} BUY transactions`);
+
     // Get the first transaction date
     const firstTxDate = new Date(sortedTx[0].date);
     const today = new Date();
 
     // Build a map of cumulative holdings at each date
-    // { 'YYYY-MM-DD': { XRP: qty, QNT: qty, ... } }
     const holdingsAtDate = {};
-
-    // Initialize cumulative holdings tracker
     const cumulativeHoldings = {};
 
     // Iterate through each day from first transaction to today
@@ -344,51 +343,42 @@ function generateHistoricalSnapshots(transactions, priceHistory) {
             txIndex++;
         }
 
-        // Save holdings for this date
-        holdingsAtDate[dateStr] = { ...cumulativeHoldings };
+        // Save holdings for this date (only if we have any holdings)
+        if (Object.keys(cumulativeHoldings).length > 0) {
+            holdingsAtDate[dateStr] = { ...cumulativeHoldings };
+        }
 
-        // Move to next day
         currentDate.setDate(currentDate.getDate() + 1);
     }
 
-    // Now calculate portfolio value for each day using price history
-    const snapshots = [];
+    // Build price lookup maps by date for each asset
+    const priceMaps = {};
+    for (const [symbol, history] of Object.entries(priceHistory)) {
+        if (!history || !Array.isArray(history)) continue;
+        priceMaps[symbol] = {};
+        history.forEach(day => {
+            if (day && day.time && day.close) {
+                const dateStr = new Date(day.time * 1000).toISOString().split('T')[0];
+                priceMaps[symbol][dateStr] = day.close;
+            }
+        });
+    }
+
+    // Get conversion rate
     const conversionRate = state.prices['BTC']?.EUR?.PRICE && state.prices['BTC']?.USD?.PRICE
         ? state.prices['BTC'].EUR.PRICE / state.prices['BTC'].USD.PRICE
-        : 0.92; // Fallback EUR/USD rate
+        : 0.92;
 
-    // Get reference price history (use first asset with history)
-    const symbols = Object.keys(priceHistory);
-    if (symbols.length === 0) {
-        console.log('No price history available');
-        return [];
-    }
+    // Generate snapshots for each date we have holdings
+    const snapshots = [];
 
-    const refHistory = priceHistory[symbols[0]];
-    if (!refHistory || refHistory.length === 0) {
-        console.log('Reference price history is empty');
-        return [];
-    }
-
-    // Iterate through price history days
-    for (let i = 0; i < refHistory.length; i++) {
-        const timestamp = refHistory[i].time * 1000;
-        const dateStr = new Date(timestamp).toISOString().split('T')[0];
-
-        // Get holdings on this date
-        const holdings = holdingsAtDate[dateStr];
-        if (!holdings || Object.keys(holdings).length === 0) {
-            continue; // No holdings yet on this date
-        }
-
-        // Calculate portfolio value
+    for (const [dateStr, holdings] of Object.entries(holdingsAtDate)) {
         let totalValue = 0;
         let hasValidPrice = false;
 
         for (const [symbol, qty] of Object.entries(holdings)) {
-            const assetHistory = priceHistory[symbol];
-            if (assetHistory && assetHistory[i]) {
-                const priceUSD = assetHistory[i].close;
+            const priceUSD = priceMaps[symbol]?.[dateStr];
+            if (priceUSD && priceUSD > 0) {
                 const priceEUR = priceUSD * conversionRate;
                 totalValue += qty * priceEUR;
                 hasValidPrice = true;
@@ -398,17 +388,25 @@ function generateHistoricalSnapshots(transactions, priceHistory) {
         if (hasValidPrice && totalValue > 0) {
             snapshots.push({
                 date: dateStr,
-                timestamp: timestamp,
+                timestamp: new Date(dateStr).getTime(),
                 value: totalValue,
-                invested: 0, // Will calculate separately if needed
+                invested: 0,
                 pnl: 0,
                 currency: 'EUR',
-                generated: true // Mark as generated from transactions
+                generated: true
             });
         }
     }
 
+    // Sort by date
+    snapshots.sort((a, b) => new Date(a.date) - new Date(b.date));
+
     console.log(`📈 Generated ${snapshots.length} historical snapshots from ${sortedTx.length} transactions`);
+    if (snapshots.length > 0) {
+        console.log(`   First: ${snapshots[0].date} = €${snapshots[0].value.toFixed(2)}`);
+        console.log(`   Last: ${snapshots[snapshots.length-1].date} = €${snapshots[snapshots.length-1].value.toFixed(2)}`);
+    }
+
     return snapshots;
 }
 

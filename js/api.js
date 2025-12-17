@@ -31,10 +31,12 @@ const API = {
             const pnl = totalValue - totalInvested;
             savePortfolioSnapshot(totalValue, totalInvested, pnl);
 
-            // Generate historical snapshots from transactions (if not already done)
+            // Generate historical snapshots from transactions on first load
+            // Check if we need to regenerate (no generated snapshots or very few)
             const existingSnapshots = loadPortfolioSnapshots();
-            if (existingSnapshots.length < 30) {
-                console.log('Generating historical snapshots from existing transactions...');
+            const generatedCount = existingSnapshots.filter(s => s.generated).length;
+            if (generatedCount < 100) {
+                console.log('Generating historical snapshots from transactions...');
                 generateAndSaveHistoricalSnapshots();
             }
             
