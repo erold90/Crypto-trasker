@@ -86,7 +86,8 @@ const CONFIG = {
         TRANSACTIONS: 'cpt_transactions_v1',
         SETTINGS: 'cpt_settings_v1',
         TARGETS: 'cpt_targets_v1',
-        WALLETS: 'cpt_wallets_v1'
+        WALLETS: 'cpt_wallets_v1',
+        HISTORY_SNAPSHOTS: 'cpt_history_snapshots_v1'
     },
 
     // Default Wallet Addresses
@@ -227,6 +228,78 @@ function saveSettings() {
 // Initialize storage on load
 loadFromStorage();
 
+// ============================================
+// PORTFOLIO HISTORY SNAPSHOTS
+// ============================================
+
+// Save daily portfolio snapshot
+function savePortfolioSnapshot(totalValue, totalInvested, pnl) {
+    try {
+        const snapshots = loadPortfolioSnapshots();
+        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+
+        // Check if we already have a snapshot for today
+        const existingIndex = snapshots.findIndex(s => s.date === today);
+
+        const snapshot = {
+            date: today,
+            timestamp: Date.now(),
+            value: parseFloat(totalValue) || 0,
+            invested: parseFloat(totalInvested) || 0,
+            pnl: parseFloat(pnl) || 0,
+            currency: state.currency
+        };
+
+        if (existingIndex >= 0) {
+            // Update today's snapshot
+            snapshots[existingIndex] = snapshot;
+        } else {
+            // Add new snapshot
+            snapshots.push(snapshot);
+        }
+
+        // Keep only last 365 days
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - 365);
+        const filtered = snapshots.filter(s => new Date(s.date) >= cutoffDate);
+
+        // Sort by date
+        filtered.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        localStorage.setItem(CONFIG.STORAGE.HISTORY_SNAPSHOTS, JSON.stringify(filtered));
+        console.log(`📊 Portfolio snapshot saved for ${today}: €${totalValue.toFixed(2)}`);
+
+        return filtered;
+    } catch (e) {
+        console.error('Error saving portfolio snapshot:', e);
+        return [];
+    }
+}
+
+// Load portfolio snapshots
+function loadPortfolioSnapshots() {
+    try {
+        const saved = localStorage.getItem(CONFIG.STORAGE.HISTORY_SNAPSHOTS);
+        if (saved) {
+            return JSON.parse(saved);
+        }
+    } catch (e) {
+        console.error('Error loading portfolio snapshots:', e);
+    }
+    return [];
+}
+
+// Get snapshots for chart display
+function getPortfolioHistory(days = 30) {
+    const snapshots = loadPortfolioSnapshots();
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+
+    return snapshots
+        .filter(s => new Date(s.date) >= cutoffDate)
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+}
+
 // Export
 window.CONFIG = CONFIG;
 window.state = state;
@@ -234,3 +307,6 @@ window.savePortfolio = savePortfolio;
 window.saveTransactions = saveTransactions;
 window.saveTargets = saveTargets;
 window.saveSettings = saveSettings;
+window.savePortfolioSnapshot = savePortfolioSnapshot;
+window.loadPortfolioSnapshots = loadPortfolioSnapshots;
+window.getPortfolioHistory = getPortfolioHistory;

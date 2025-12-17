@@ -775,7 +775,121 @@ const UI = {
         this.renderAll();
         this.updateSyncStatus(); // Update button with last sync time
         this.showWalletModal(); // Refresh modal
-    }
+    },
+
+    // ============================================
+    // TRANSACTION IMPORT FROM BLOCKCHAIN
+    // ============================================
+
+    // Import transactions from blockchain
+    async importTransactionsFromBlockchain() {
+        const progressEl = document.getElementById('importProgress');
+        const resultEl = document.getElementById('importResult');
+        const importBtn = document.getElementById('btnImportTx');
+
+        if (progressEl) progressEl.style.display = 'block';
+        if (resultEl) resultEl.innerHTML = '';
+        if (importBtn) importBtn.disabled = true;
+
+        try {
+            const transactions = await Wallet.importAllTransactions((status) => {
+                if (progressEl) progressEl.textContent = status;
+            });
+
+            if (transactions.length === 0) {
+                if (resultEl) resultEl.innerHTML = '<p class="text-muted">Nessuna transazione trovata</p>';
+                return;
+            }
+
+            // Build result summary
+            let html = '<div class="import-results">';
+            html += `<h4>📊 Trovate ${transactions.length} transazioni</h4>`;
+            html += '<div class="import-summary">';
+
+            // Calculate summary per asset
+            const symbols = ['XRP', 'QNT', 'HBAR', 'XDC'];
+            for (const symbol of symbols) {
+                const result = Wallet.calculateAveragePrice(transactions, symbol);
+                if (result) {
+                    const color = CONFIG.COLORS[symbol] || CONFIG.COLORS.DEFAULT;
+                    html += `
+                        <div class="import-asset-summary">
+                            <div class="asset-icon" style="background: ${color}">${symbol.substring(0, 2)}</div>
+                            <div class="import-asset-info">
+                                <strong>${symbol}</strong>
+                                <span>${result.transactions} transazioni</span>
+                            </div>
+                            <div class="import-asset-values">
+                                <span class="import-qty">${Portfolio.formatNumber(result.totalQty, 2)} ${symbol}</span>
+                                <span class="import-avg">PMC: €${result.avgPriceEUR.toFixed(4)}</span>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+
+            html += '</div>';
+            html += '<button class="btn btn-primary" onclick="UI.applyImportedTransactions()">✅ Applica al Portfolio</button>';
+            html += '</div>';
+
+            // Store transactions for later use
+            this.pendingImportTransactions = transactions;
+
+            if (resultEl) resultEl.innerHTML = html;
+            if (progressEl) progressEl.textContent = 'Import completato!';
+
+        } catch (e) {
+            console.error('Import error:', e);
+            if (resultEl) resultEl.innerHTML = `<p class="text-error">Errore: ${e.message}</p>`;
+        } finally {
+            if (importBtn) importBtn.disabled = false;
+        }
+    },
+
+    // Apply imported transactions to portfolio
+    applyImportedTransactions() {
+        if (!this.pendingImportTransactions || this.pendingImportTransactions.length === 0) {
+            this.showToast('Nessuna transazione da importare', 'error');
+            return;
+        }
+
+        const symbols = ['XRP', 'QNT', 'HBAR', 'XDC'];
+
+        for (const symbol of symbols) {
+            const result = Wallet.calculateAveragePrice(this.pendingImportTransactions, symbol);
+            if (result) {
+                // Find asset in portfolio
+                const asset = state.portfolio.find(a => a.symbol === symbol);
+                if (asset) {
+                    asset.avgPrice = result.avgPriceEUR;
+                    console.log(`${symbol}: Updated avgPrice to €${result.avgPriceEUR.toFixed(4)}`);
+                }
+            }
+        }
+
+        // Save updated transactions to state
+        state.transactions = this.pendingImportTransactions.map((tx, idx) => ({
+            id: idx + 1,
+            date: tx.date,
+            type: tx.type,
+            asset: tx.asset,
+            qty: tx.qty,
+            price: tx.priceEUR || 0,
+            note: `Import da blockchain - ${tx.hash?.substring(0, 10)}...`
+        }));
+
+        savePortfolio();
+        saveTransactions();
+        Analysis.runAll();
+        this.renderAll();
+        this.hideModal('walletModal');
+
+        this.showToast('Transazioni importate con successo!', 'success');
+        this.pendingImportTransactions = null;
+    },
+
+    // Pending transactions storage
+    pendingImportTransactions: null
 };
 
 // Initialize on DOM ready
