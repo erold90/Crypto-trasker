@@ -30,6 +30,13 @@ const API = {
             const totalInvested = Portfolio.getTotalInvested();
             const pnl = totalValue - totalInvested;
             savePortfolioSnapshot(totalValue, totalInvested, pnl);
+
+            // Generate historical snapshots from transactions (if not already done)
+            const existingSnapshots = loadPortfolioSnapshots();
+            if (existingSnapshots.length < 30) {
+                console.log('Generating historical snapshots from existing transactions...');
+                generateAndSaveHistoricalSnapshots();
+            }
             
         } catch (error) {
             console.error('Error fetching data:', error);

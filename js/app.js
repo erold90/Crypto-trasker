@@ -880,11 +880,16 @@ const UI = {
 
         savePortfolio();
         saveTransactions();
+
+        // Generate historical snapshots from transactions
+        console.log('Generating historical snapshots from imported transactions...');
+        generateAndSaveHistoricalSnapshots();
+
         Analysis.runAll();
         this.renderAll();
         this.hideModal('walletModal');
 
-        this.showToast('Transazioni importate con successo!', 'success');
+        this.showToast('Transazioni importate e storico generato!', 'success');
         this.pendingImportTransactions = null;
     },
 
