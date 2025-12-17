@@ -45,7 +45,12 @@ const App = {
         
         // Edit mode toggle
         document.getElementById('editBtn')?.addEventListener('click', () => this.toggleEditMode());
-        
+
+        // Wallet sync button
+        document.getElementById('syncWalletBtn')?.addEventListener('click', () => {
+            UI.showWalletModal();
+        });
+
         // Modal close on backdrop click
         document.querySelectorAll('.modal').forEach(modal => {
             modal.addEventListener('click', (e) => {
@@ -143,7 +148,10 @@ const UI = {
     // Update prices only (for auto-refresh)
     updatePrices() {
         this.updateTimestamp();
-        this.renderAssetTable();
+        // Don't update table while editing to preserve input values
+        if (!state.isEditing) {
+            this.renderAssetTable();
+        }
     },
     
     // Update KPIs only
@@ -606,9 +614,121 @@ const UI = {
         this.renderAll();
         this.hideModal('addAssetModal');
         this.showToast(`${symbol} aggiunto al portfolio!`, 'success');
-        
+
         // Reset form
         e.target.reset();
+    },
+
+    // ============================================
+    // WALLET FUNCTIONS
+    // ============================================
+
+    // Show wallet configuration modal
+    showWalletModal() {
+        const container = document.getElementById('walletConfigList');
+        if (!container) return;
+
+        const html = state.portfolio.map(asset => {
+            const address = Wallet.getAddress(asset.symbol);
+            const hasAddress = !!address;
+            const color = CONFIG.COLORS[asset.symbol] || CONFIG.COLORS.DEFAULT;
+
+            return `
+                <div class="wallet-config-item">
+                    <div class="wallet-asset-info">
+                        <div class="asset-icon" style="background: ${color}">${asset.symbol.substring(0, 2)}</div>
+                        <div class="wallet-asset-details">
+                            <span class="wallet-asset-symbol">${asset.symbol}</span>
+                            <span class="wallet-asset-qty">${Portfolio.formatNumber(asset.qty, 2)} ${asset.symbol}</span>
+                        </div>
+                    </div>
+                    <div class="wallet-address-wrapper">
+                        <input type="text"
+                               class="wallet-address-input"
+                               id="wallet-${asset.symbol}"
+                               value="${address}"
+                               placeholder="Inserisci indirizzo ${asset.symbol}..."
+                               onchange="UI.saveWalletAddress('${asset.symbol}', this.value)">
+                        <div class="wallet-status ${hasAddress ? 'configured' : ''}">
+                            ${hasAddress ? '✓' : '○'}
+                        </div>
+                    </div>
+                    <button class="btn btn-sm btn-sync"
+                            onclick="UI.syncSingleWallet('${asset.symbol}')"
+                            ${!hasAddress ? 'disabled' : ''}>
+                        🔄
+                    </button>
+                </div>
+            `;
+        }).join('');
+
+        container.innerHTML = html;
+        this.showModal('walletModal');
+    },
+
+    // Save wallet address
+    saveWalletAddress(symbol, address) {
+        Wallet.setAddress(symbol, address.trim());
+
+        // Update UI
+        const statusEl = document.querySelector(`#wallet-${symbol}`)?.parentElement?.querySelector('.wallet-status');
+        const syncBtn = document.querySelector(`#wallet-${symbol}`)?.parentElement?.parentElement?.querySelector('.btn-sync');
+
+        if (statusEl) {
+            statusEl.classList.toggle('configured', !!address.trim());
+            statusEl.textContent = address.trim() ? '✓' : '○';
+        }
+        if (syncBtn) {
+            syncBtn.disabled = !address.trim();
+        }
+
+        this.showToast(`Indirizzo ${symbol} salvato`, 'success');
+    },
+
+    // Sync single wallet
+    async syncSingleWallet(symbol) {
+        this.showToast(`Sincronizzazione ${symbol}...`, 'info');
+
+        const result = await Wallet.syncAsset(symbol);
+
+        if (result.success) {
+            if (result.changed) {
+                this.showToast(`${symbol}: ${Portfolio.formatNumber(result.oldQty, 2)} → ${Portfolio.formatNumber(result.newQty, 2)}`, 'success');
+            } else {
+                this.showToast(`${symbol}: saldo invariato`, 'info');
+            }
+            Analysis.runAll();
+            this.renderAll();
+            this.showWalletModal(); // Refresh modal
+        } else {
+            this.showToast(`Errore ${symbol}: ${result.message}`, 'error');
+        }
+    },
+
+    // Sync all wallets
+    async syncAllWallets() {
+        this.showToast('Sincronizzazione wallet in corso...', 'info');
+
+        const results = await Wallet.syncAll();
+
+        if (results.success.length > 0) {
+            const summary = results.success.map(r =>
+                `${r.symbol}: ${Portfolio.formatNumber(r.newQty, 2)}`
+            ).join(', ');
+            this.showToast(`Aggiornati: ${summary}`, 'success');
+        }
+
+        if (results.failed.length > 0) {
+            this.showToast(`Errori: ${results.failed.join(', ')}`, 'error');
+        }
+
+        if (results.success.length === 0 && results.failed.length === 0) {
+            this.showToast('Nessun wallet configurato', 'info');
+        }
+
+        Analysis.runAll();
+        this.renderAll();
+        this.showWalletModal(); // Refresh modal
     }
 };
 

@@ -85,7 +85,16 @@ const CONFIG = {
         PORTFOLIO: 'cpt_portfolio_v1',
         TRANSACTIONS: 'cpt_transactions_v1',
         SETTINGS: 'cpt_settings_v1',
-        TARGETS: 'cpt_targets_v1'
+        TARGETS: 'cpt_targets_v1',
+        WALLETS: 'cpt_wallets_v1'
+    },
+
+    // Default Wallet Addresses
+    DEFAULT_WALLETS: {
+        XRP: 'rLRR1mFDEdYCH5fUgxR6FD3UE9DLsWV7CH',
+        QNT: '0xA64D794A712279DA9f6CC4eafE1C774D7a353eF9',
+        HBAR: '0.0.10081465',
+        XDC: '0x5dba231a4dbf07713fe94c6d555c8ebe78a11c8c'  // Include psXDC staking
     },
     
     // Analysis Thresholds
@@ -142,31 +151,54 @@ const state = {
 // STORAGE FUNCTIONS
 // ============================================
 
+function sanitizePortfolio(portfolio) {
+    // Fix corrupted data (strings instead of numbers)
+    let needsSave = false;
+    portfolio.forEach(asset => {
+        const originalQty = asset.qty;
+        const originalPrice = asset.avgPrice;
+        asset.qty = parseFloat(asset.qty) || 0;
+        asset.avgPrice = parseFloat(asset.avgPrice) || 0;
+        if (originalQty !== asset.qty || originalPrice !== asset.avgPrice) {
+            needsSave = true;
+            console.warn(`Fixed corrupted data for ${asset.symbol}: qty=${originalQty}->${asset.qty}, avgPrice=${originalPrice}->${asset.avgPrice}`);
+        }
+    });
+    return needsSave;
+}
+
 function loadFromStorage() {
     try {
         // Load portfolio
         const savedPortfolio = localStorage.getItem(CONFIG.STORAGE.PORTFOLIO);
-        state.portfolio = savedPortfolio 
-            ? JSON.parse(savedPortfolio) 
+        state.portfolio = savedPortfolio
+            ? JSON.parse(savedPortfolio)
             : JSON.parse(JSON.stringify(CONFIG.DEFAULT_PORTFOLIO));
-        
+
+        // Sanitize portfolio data (fix any corrupted values)
+        const needsSave = sanitizePortfolio(state.portfolio);
+        if (needsSave) {
+            localStorage.setItem(CONFIG.STORAGE.PORTFOLIO, JSON.stringify(state.portfolio));
+            console.log('Portfolio data sanitized and saved');
+        }
+
         // Load transactions
         const savedTx = localStorage.getItem(CONFIG.STORAGE.TRANSACTIONS);
-        state.transactions = savedTx 
-            ? JSON.parse(savedTx) 
+        state.transactions = savedTx
+            ? JSON.parse(savedTx)
             : JSON.parse(JSON.stringify(CONFIG.TRANSACTIONS));
-        
+
         // Load targets
         const savedTargets = localStorage.getItem(CONFIG.STORAGE.TARGETS);
         state.targets = savedTargets ? JSON.parse(savedTargets) : [];
-        
+
         // Load settings
         const savedSettings = localStorage.getItem(CONFIG.STORAGE.SETTINGS);
         if (savedSettings) {
             const settings = JSON.parse(savedSettings);
             state.currency = settings.currency || 'EUR';
         }
-        
+
     } catch (e) {
         console.error('Error loading from storage:', e);
         state.portfolio = JSON.parse(JSON.stringify(CONFIG.DEFAULT_PORTFOLIO));
