@@ -414,6 +414,24 @@
                     <span class="icon">🔄</span> Sincronizza Tutti
                 </button>
             </div>
+
+            <!-- Import Transactions Section -->
+            <div class="import-section">
+                <h3>📥 Importa Storico Transazioni</h3>
+                <p class="modal-description">Legge le transazioni dalla blockchain e calcola automaticamente il prezzo medio di carico (PMC).</p>
+
+                <button type="button" class="btn btn-wallet" id="btnImportTx" onclick="UI.importTransactionsFromBlockchain()">
+                    <span class="icon">📊</span> Importa Transazioni
+                </button>
+
+                <div class="import-progress" id="importProgress" style="display: none;">
+                    Lettura in corso...
+                </div>
+
+                <div class="import-result" id="importResult">
+                    <!-- Results will be shown here -->
+                </div>
+            </div>
         </div>
     </div>
 </div>

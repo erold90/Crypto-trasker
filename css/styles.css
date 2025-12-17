@@ -2004,3 +2004,100 @@ tr:hover {
     opacity: 0.5;
     cursor: not-allowed;
 }
+
+/* ============================================
+   IMPORT TRANSACTIONS SECTION
+   ============================================ */
+
+.import-section {
+    margin-top: 32px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border-subtle);
+}
+
+.import-section h3 {
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    font-size: 16px;
+}
+
+.import-progress {
+    margin-top: 16px;
+    padding: 12px;
+    background: var(--bg-elevated);
+    border-radius: var(--radius-sm);
+    color: var(--accent-blue);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+.import-result {
+    margin-top: 16px;
+}
+
+.import-results h4 {
+    color: var(--text-primary);
+    margin-bottom: 16px;
+}
+
+.import-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.import-asset-summary {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: var(--bg-elevated);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-subtle);
+}
+
+.import-asset-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.import-asset-info strong {
+    color: var(--text-primary);
+}
+
+.import-asset-info span {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.import-asset-values {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+}
+
+.import-qty {
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 14px;
+}
+
+.import-avg {
+    color: var(--accent-green);
+    font-family: var(--font-mono);
+    font-size: 12px;
+}
+
+.text-error {
+    color: var(--status-danger);
+}

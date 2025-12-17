@@ -368,6 +368,293 @@ const Wallet = {
     // Check if any wallet is configured
     hasAnyWallet() {
         return state.portfolio.some(asset => this.hasWallet(asset.symbol));
+    },
+
+    // ============================================
+    // TRANSACTION HISTORY IMPORT
+    // ============================================
+
+    // Fetch XRP transaction history
+    async fetchXRPTransactions(address) {
+        if (!address) return [];
+
+        try {
+            const response = await fetch(this.APIS.XRP, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    method: 'account_tx',
+                    params: [{
+                        account: address,
+                        ledger_index_min: -1,
+                        ledger_index_max: -1,
+                        limit: 100
+                    }]
+                })
+            });
+
+            const data = await response.json();
+            const transactions = [];
+
+            if (data.result?.transactions) {
+                for (const tx of data.result.transactions) {
+                    const meta = tx.meta || tx.metaData;
+                    const txData = tx.tx || tx;
+
+                    // Only consider Payment transactions where we receive XRP
+                    if (txData.TransactionType === 'Payment' && txData.Destination === address) {
+                        const delivered = meta?.delivered_amount;
+                        let amount = 0;
+
+                        if (typeof delivered === 'string') {
+                            amount = parseInt(delivered) / 1000000; // drops to XRP
+                        } else if (typeof delivered === 'object' && delivered.value) {
+                            continue; // Skip token payments
+                        }
+
+                        if (amount > 0) {
+                            const date = new Date((txData.date + 946684800) * 1000); // Ripple epoch
+                            transactions.push({
+                                type: 'BUY',
+                                asset: 'XRP',
+                                qty: amount,
+                                date: date.toISOString().split('T')[0],
+                                timestamp: date.getTime(),
+                                hash: txData.hash,
+                                from: txData.Account
+                            });
+                        }
+                    }
+                }
+            }
+
+            return transactions;
+        } catch (e) {
+            console.error('Error fetching XRP transactions:', e);
+            return [];
+        }
+    },
+
+    // Fetch QNT (ERC-20) transaction history
+    async fetchQNTTransactions(address) {
+        if (!address) return [];
+
+        try {
+            const url = `${this.APIS.ETHEREUM}?chainid=1&module=account&action=tokentx&contractaddress=${this.QNT_CONTRACT}&address=${address}&sort=asc&apikey=${this.ETHERSCAN_API_KEY}`;
+            const response = await fetch(url);
+            const data = await response.json();
+            const transactions = [];
+
+            if (data.status === '1' && data.result) {
+                for (const tx of data.result) {
+                    // Only incoming transfers (to our address)
+                    if (tx.to.toLowerCase() === address.toLowerCase()) {
+                        const amount = parseInt(tx.value) / Math.pow(10, 18);
+                        const date = new Date(parseInt(tx.timeStamp) * 1000);
+
+                        transactions.push({
+                            type: 'BUY',
+                            asset: 'QNT',
+                            qty: amount,
+                            date: date.toISOString().split('T')[0],
+                            timestamp: date.getTime(),
+                            hash: tx.hash,
+                            from: tx.from
+                        });
+                    }
+                }
+            }
+
+            return transactions;
+        } catch (e) {
+            console.error('Error fetching QNT transactions:', e);
+            return [];
+        }
+    },
+
+    // Fetch HBAR transaction history
+    async fetchHBARTransactions(accountId) {
+        if (!accountId) return [];
+
+        try {
+            const url = `${this.APIS.HBAR}/api/v1/transactions?account.id=${accountId}&limit=100&order=asc&transactiontype=CRYPTOTRANSFER`;
+            const response = await fetch(url);
+            const data = await response.json();
+            const transactions = [];
+
+            if (data.transactions) {
+                for (const tx of data.transactions) {
+                    // Find transfers to our account
+                    const transfers = tx.transfers || [];
+                    for (const transfer of transfers) {
+                        if (transfer.account === accountId && transfer.amount > 0) {
+                            const amount = transfer.amount / 100000000; // tinybars to HBAR
+                            const date = new Date(parseFloat(tx.consensus_timestamp) * 1000);
+
+                            // Skip small amounts (likely fees)
+                            if (amount > 1) {
+                                transactions.push({
+                                    type: 'BUY',
+                                    asset: 'HBAR',
+                                    qty: amount,
+                                    date: date.toISOString().split('T')[0],
+                                    timestamp: date.getTime(),
+                                    hash: tx.transaction_id,
+                                    from: 'exchange'
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
+            return transactions;
+        } catch (e) {
+            console.error('Error fetching HBAR transactions:', e);
+            return [];
+        }
+    },
+
+    // Fetch XDC transaction history (native + psXDC)
+    async fetchXDCTransactions(address) {
+        if (!address) return [];
+
+        try {
+            const normalizedAddress = address.toLowerCase().startsWith('xdc')
+                ? '0x' + address.slice(3)
+                : address;
+
+            const transactions = [];
+
+            // 1. Native XDC transactions
+            const nativeUrl = `${this.APIS.XDC}?module=account&action=txlist&address=${normalizedAddress}&sort=asc`;
+            const nativeResponse = await fetch(nativeUrl);
+            const nativeData = await nativeResponse.json();
+
+            if (nativeData.status === '1' && nativeData.result) {
+                for (const tx of nativeData.result) {
+                    if (tx.to.toLowerCase() === normalizedAddress.toLowerCase() && tx.value !== '0') {
+                        const amount = parseInt(tx.value) / Math.pow(10, 18);
+                        const date = new Date(parseInt(tx.timeStamp) * 1000);
+
+                        // Skip small amounts
+                        if (amount > 100) {
+                            transactions.push({
+                                type: 'BUY',
+                                asset: 'XDC',
+                                qty: amount,
+                                date: date.toISOString().split('T')[0],
+                                timestamp: date.getTime(),
+                                hash: tx.hash,
+                                from: tx.from
+                            });
+                        }
+                    }
+                }
+            }
+
+            return transactions;
+        } catch (e) {
+            console.error('Error fetching XDC transactions:', e);
+            return [];
+        }
+    },
+
+    // Fetch historical price for a specific date
+    async fetchHistoricalPrice(symbol, timestamp) {
+        try {
+            // CryptoCompare API for historical price
+            const url = `https://min-api.cryptocompare.com/data/pricehistorical?fsym=${symbol}&tsyms=EUR,USD&ts=${Math.floor(timestamp / 1000)}&api_key=${CONFIG.API_KEY}`;
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (data[symbol]) {
+                return {
+                    EUR: data[symbol].EUR || 0,
+                    USD: data[symbol].USD || 0
+                };
+            }
+            return null;
+        } catch (e) {
+            console.error(`Error fetching historical price for ${symbol}:`, e);
+            return null;
+        }
+    },
+
+    // Import all transactions from blockchain
+    async importAllTransactions(progressCallback) {
+        const allTransactions = [];
+        const symbols = ['XRP', 'QNT', 'HBAR', 'XDC'];
+
+        for (const symbol of symbols) {
+            const address = this.getAddress(symbol);
+            if (!address) continue;
+
+            if (progressCallback) progressCallback(`Lettura ${symbol}...`);
+
+            let txs = [];
+            switch (symbol) {
+                case 'XRP':
+                    txs = await this.fetchXRPTransactions(address);
+                    break;
+                case 'QNT':
+                    txs = await this.fetchQNTTransactions(address);
+                    break;
+                case 'HBAR':
+                    txs = await this.fetchHBARTransactions(address);
+                    break;
+                case 'XDC':
+                    txs = await this.fetchXDCTransactions(address);
+                    break;
+            }
+
+            console.log(`${symbol}: found ${txs.length} transactions`);
+
+            // Fetch historical prices for each transaction
+            for (let i = 0; i < txs.length; i++) {
+                const tx = txs[i];
+                if (progressCallback) progressCallback(`${symbol}: prezzo ${i + 1}/${txs.length}...`);
+
+                const price = await this.fetchHistoricalPrice(symbol, tx.timestamp);
+                if (price) {
+                    tx.priceEUR = price.EUR;
+                    tx.priceUSD = price.USD;
+                    tx.valueEUR = tx.qty * price.EUR;
+                    tx.valueUSD = tx.qty * price.USD;
+                }
+
+                // Small delay to avoid rate limiting
+                await new Promise(r => setTimeout(r, 200));
+            }
+
+            allTransactions.push(...txs);
+        }
+
+        // Sort by date
+        allTransactions.sort((a, b) => a.timestamp - b.timestamp);
+
+        return allTransactions;
+    },
+
+    // Calculate weighted average price from transactions
+    calculateAveragePrice(transactions, symbol) {
+        const assetTxs = transactions.filter(tx => tx.asset === symbol && tx.type === 'BUY');
+
+        if (assetTxs.length === 0) return null;
+
+        let totalQty = 0;
+        let totalValueEUR = 0;
+
+        for (const tx of assetTxs) {
+            totalQty += tx.qty;
+            totalValueEUR += tx.valueEUR || 0;
+        }
+
+        return {
+            totalQty,
+            avgPriceEUR: totalValueEUR / totalQty,
+            transactions: assetTxs.length
+        };
     }
 };
 
