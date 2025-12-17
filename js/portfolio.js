@@ -76,11 +76,15 @@ const Portfolio = {
     addAsset(symbol, name, qty, avgPrice) {
         // Check if already exists
         const existing = state.portfolio.find(a => a.symbol === symbol.toUpperCase());
-        
+
+        // Ensure numeric values
+        const qtyNum = parseFloat(qty);
+        const priceNum = parseFloat(avgPrice);
+
         if (existing) {
             // Update existing - calculate new average price
-            const totalQty = existing.qty + qty;
-            const totalCost = (existing.qty * existing.avgPrice) + (qty * avgPrice);
+            const totalQty = existing.qty + qtyNum;
+            const totalCost = (existing.qty * existing.avgPrice) + (qtyNum * priceNum);
             existing.avgPrice = totalCost / totalQty;
             existing.qty = totalQty;
         } else {
