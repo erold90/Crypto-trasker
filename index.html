@@ -479,20 +479,20 @@
     </div>
 </footer>
 
-<!-- JavaScript Modules (v=20251220c for cache busting) -->
-<script src="js/config.js?v=20251220c"></script>
-<script src="js/api.js?v=20251220c"></script>
-<script src="js/portfolio.js?v=20251220c"></script>
-<script src="js/analysis.js?v=20251220c"></script>
-<script src="js/charts.js?v=20251220c"></script>
-<script src="js/calculator.js?v=20251220c"></script>
-<script src="js/wallet.js?v=20251220c"></script>
-<script src="js/app.js?v=20251220c"></script>
+<!-- JavaScript Modules (v=20251220d for cache busting) -->
+<script src="js/config.js?v=20251220d"></script>
+<script src="js/api.js?v=20251220d"></script>
+<script src="js/portfolio.js?v=20251220d"></script>
+<script src="js/analysis.js?v=20251220d"></script>
+<script src="js/charts.js?v=20251220d"></script>
+<script src="js/calculator.js?v=20251220d"></script>
+<script src="js/wallet.js?v=20251220d"></script>
+<script src="js/app.js?v=20251220d"></script>
 
 <!-- Clear Cache Function -->
 <script>
 function clearCacheAndReload() {
-    if (confirm('Vuoi cancellare tutti i dati salvati e ricaricare la pagina?\n\nQuesto resetterà:\n- Portfolio ai valori predefiniti\n- Transazioni\n- Impostazioni wallet\n- Storico snapshots\n\nI dati verranno ricaricati dal server.')) {
+    if (confirm('Vuoi cancellare tutti i dati salvati e ricaricare la pagina?\n\nQuesto resetterà:\n- Portfolio ai valori predefiniti\n- Transazioni\n- Impostazioni wallet\n- Storico snapshots\n- Cache prezzi storici\n\nI dati verranno ricaricati dal server.')) {
         // Clear all localStorage keys
         const keys = Object.values(CONFIG.STORAGE);
         keys.forEach(key => {
@@ -500,9 +500,11 @@ function clearCacheAndReload() {
             console.log(`Removed: ${key}`);
         });
 
-        // Also clear wallet sync timestamp
+        // Also clear wallet sync timestamp and price history cache
         localStorage.removeItem('cpt_last_sync_v1');
         localStorage.removeItem('cpt_wallets_v1');
+        localStorage.removeItem('cpt_price_history_v1');
+        console.log('Removed: cpt_price_history_v1');
 
         // Show feedback
         alert('Cache cancellata! La pagina verrà ricaricata.');
