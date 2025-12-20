@@ -140,30 +140,42 @@ const Wallet = {
     },
 
     // Fetch QNT (ERC-20) balance from Ethereum
+    // Usa RPC diretto (Etherscan V1 deprecato, V2 richiede nuova API key)
     async fetchQNTBalance(address) {
         if (!address) return null;
 
         try {
-            // Build URL based on proxy mode
-            let url;
-            if (CONFIG.USE_PROXY) {
-                // Use proxy endpoint (V2 API)
-                url = `${window.location.origin}${CONFIG.APIS.PROXY.ETHERSCAN}?module=account&action=tokenbalance&contractaddress=${this.QNT_CONTRACT}&address=${address}&tag=latest`;
-            } else {
-                // Direct call using V1 API (free tier compatible)
-                url = `${this.APIS.ETHEREUM_V1}?module=account&action=tokenbalance&contractaddress=${this.QNT_CONTRACT}&address=${address}&tag=latest&apikey=${CONFIG.ETHERSCAN_API_KEY || ''}`;
-            }
+            // Usa RPC pubblico Ethereum (no API key required)
+            const ETH_RPC = 'https://ethereum.publicnode.com';
 
-            const response = await this.fetchWithTimeout(url);
-            const data = await response.json();
+            // balanceOf(address) selector = 0x70a08231
+            const paddedAddress = address.replace('0x', '').toLowerCase().padStart(64, '0');
+            const data = '0x70a08231' + paddedAddress;
 
-            if (data.status === '1' && data.result) {
+            const response = await this.fetchWithTimeout(ETH_RPC, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    jsonrpc: '2.0',
+                    method: 'eth_call',
+                    params: [{
+                        to: this.QNT_CONTRACT,
+                        data: data
+                    }, 'latest'],
+                    id: 1
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.result && result.result !== '0x') {
                 // QNT has 18 decimals
-                const balance = parseInt(data.result) / Math.pow(10, 18);
+                const balance = parseInt(result.result, 16) / Math.pow(10, 18);
+                console.log(`QNT balance (RPC): ${balance.toFixed(2)}`);
                 return balance;
             }
 
-            console.warn('QNT balance not found:', data);
+            console.warn('QNT balance not found:', result);
             return null;
         } catch (e) {
             console.error('Error fetching QNT balance:', e.message);
@@ -539,48 +551,15 @@ const Wallet = {
     },
 
     // Fetch QNT (ERC-20) transaction history
+    // NOTA: Non disponibile senza Etherscan API key valida
+    // Le transazioni QNT devono essere inserite manualmente in CONFIG.TRANSACTIONS
     async fetchQNTTransactions(address) {
         if (!address) return [];
 
-        try {
-            // Build URL based on proxy mode
-            let url;
-            if (CONFIG.USE_PROXY) {
-                // Use proxy endpoint (V2 API)
-                url = `${window.location.origin}${CONFIG.APIS.PROXY.ETHERSCAN}?module=account&action=tokentx&contractaddress=${this.QNT_CONTRACT}&address=${address}&sort=asc`;
-            } else {
-                // Direct call using V1 API (free tier compatible)
-                url = `${this.APIS.ETHEREUM_V1}?module=account&action=tokentx&contractaddress=${this.QNT_CONTRACT}&address=${address}&sort=asc&apikey=${CONFIG.ETHERSCAN_API_KEY || ''}`;
-            }
-            const response = await fetch(url);
-            const data = await response.json();
-            const transactions = [];
-
-            if (data.status === '1' && data.result) {
-                for (const tx of data.result) {
-                    // Only incoming transfers (to our address)
-                    if (tx.to.toLowerCase() === address.toLowerCase()) {
-                        const amount = parseInt(tx.value) / Math.pow(10, 18);
-                        const date = new Date(parseInt(tx.timeStamp) * 1000);
-
-                        transactions.push({
-                            type: 'BUY',
-                            asset: 'QNT',
-                            qty: amount,
-                            date: date.toISOString().split('T')[0],
-                            timestamp: date.getTime(),
-                            hash: tx.hash,
-                            from: tx.from
-                        });
-                    }
-                }
-            }
-
-            return transactions;
-        } catch (e) {
-            console.error('Error fetching QNT transactions:', e);
-            return [];
-        }
+        // QNT transaction history richiede Etherscan API (V1 deprecato, V2 richiede nuova key)
+        // Per ora usa le transazioni in CONFIG.TRANSACTIONS
+        console.log('QNT: Transaction history non disponibile (usa CONFIG.TRANSACTIONS)');
+        return [];
     },
 
     // Fetch HBAR transaction history
