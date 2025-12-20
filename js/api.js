@@ -212,7 +212,7 @@ const API = {
         return Object.values(dataMap).sort((a, b) => a.time - b.time);
     },
 
-    // Fetch historical data for all assets
+    // Fetch historical data for all assets (sequential to avoid rate limiting)
     async fetchHistory() {
         const symbols = [...state.portfolio.map(a => a.symbol), 'BTC'];
 
@@ -222,7 +222,8 @@ const API = {
         // Check if we need to seed older data (first run or insufficient data)
         const needsSeeding = !cachedHistory.XRP || cachedHistory.XRP.length < 500;
 
-        const promises = symbols.map(async (symbol) => {
+        // Sequential requests with delay to avoid rate limiting
+        for (const symbol of symbols) {
             try {
                 // Fetch recent data (last 365 days)
                 const url = this.buildCryptoUrl('v2/histoday', {
@@ -235,8 +236,15 @@ const API = {
                 const data = await res.json();
                 let newData = data.Data?.Data || [];
 
+                if (newData.length === 0) {
+                    console.warn(`${symbol}: API returned no data`, data);
+                }
+
                 // If seeding needed, also fetch older data (365-730 days ago)
                 if (needsSeeding && newData.length > 0) {
+                    // Small delay to avoid rate limiting
+                    await new Promise(r => setTimeout(r, 300));
+
                     const oldestTimestamp = newData[0]?.time;
                     if (oldestTimestamp) {
                         try {
@@ -244,14 +252,13 @@ const API = {
                                 fsym: symbol,
                                 tsym: 'USD',
                                 limit: '365',
-                                toTs: (oldestTimestamp - 86400).toString()  // 1 day before oldest
+                                toTs: (oldestTimestamp - 86400).toString()
                             });
                             const olderRes = await fetch(olderUrl);
                             const olderData = await olderRes.json();
                             const olderDays = olderData.Data?.Data || [];
 
                             if (olderDays.length > 0) {
-                                // Prepend older data
                                 newData = [...olderDays, ...newData];
                                 console.log(`${symbol}: Seeded ${olderDays.length} older data points`);
                             }
@@ -267,16 +274,18 @@ const API = {
 
                 console.log(`${symbol}: ${state.history[symbol].length} total data points`);
 
+                // Small delay between symbols to avoid rate limiting
+                await new Promise(r => setTimeout(r, 200));
+
             } catch (e) {
                 console.error(`Error fetching history for ${symbol}:`, e);
                 // Use cached data if API fails
                 if (cachedHistory[symbol]) {
                     state.history[symbol] = cachedHistory[symbol];
+                    console.log(`${symbol}: Using cached data (${cachedHistory[symbol].length} points)`);
                 }
             }
-        });
-
-        await Promise.all(promises);
+        }
 
         // Save merged history to localStorage for future use
         this.savePriceHistoryCache();
