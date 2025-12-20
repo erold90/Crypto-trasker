@@ -436,6 +436,17 @@
     </div>
 </div>
 
+<!-- Footer with Clear Cache Button -->
+<footer class="dashboard-footer">
+    <div class="footer-content">
+        <span class="footer-version">Crypto Portfolio Tracker v1.2</span>
+        <button class="btn-clear-cache" onclick="clearCacheAndReload()">
+            <span class="icon">🗑️</span> Cancella Cache e Aggiorna
+        </button>
+        <span class="footer-info">Ultimo deploy: Dec 2025</span>
+    </div>
+</footer>
+
 <!-- JavaScript Modules -->
 <script src="js/config.js"></script>
 <script src="js/api.js"></script>
@@ -445,6 +456,30 @@
 <script src="js/calculator.js"></script>
 <script src="js/wallet.js"></script>
 <script src="js/app.js"></script>
+
+<!-- Clear Cache Function -->
+<script>
+function clearCacheAndReload() {
+    if (confirm('Vuoi cancellare tutti i dati salvati e ricaricare la pagina?\n\nQuesto resetterà:\n- Portfolio ai valori predefiniti\n- Transazioni\n- Impostazioni wallet\n- Storico snapshots\n\nI dati verranno ricaricati dal server.')) {
+        // Clear all localStorage keys
+        const keys = Object.values(CONFIG.STORAGE);
+        keys.forEach(key => {
+            localStorage.removeItem(key);
+            console.log(`Removed: ${key}`);
+        });
+
+        // Also clear wallet sync timestamp
+        localStorage.removeItem('cpt_last_sync_v1');
+        localStorage.removeItem('cpt_wallets_v1');
+
+        // Show feedback
+        alert('Cache cancellata! La pagina verrà ricaricata.');
+
+        // Force reload from server (bypass browser cache)
+        window.location.reload(true);
+    }
+}
+</script>
 
 </body>
 </html>
