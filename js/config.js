@@ -76,31 +76,19 @@ const CONFIG = {
     },
     
     // Transaction History (dati reali da Crypto Ledger Tracker)
-    // Prezzi in EUR (priceEUR) - calcolati da eurAmount/amount
+    // PMC corretti: XRP €0.4999, QNT €64.44, XDC €0.06692, HBAR €0.1676
     TRANSACTIONS: [
-        // XRP - Acquisti Sept 2024
-        { id: 1, date: '2024-09-04', type: 'BUY', asset: 'XRP', qty: 4001.54, priceEUR: 0.4998, note: 'Revolut - Prima posizione XRP' },
-        { id: 2, date: '2024-09-29', type: 'BUY', asset: 'XRP', qty: 3516.80, priceEUR: 0.6057, note: 'Revolut - Accumulo XRP' },
-        { id: 3, date: '2024-09-29', type: 'BUY', asset: 'XRP', qty: 2564.74, priceEUR: 0.6081, note: 'Revolut - Terza tranche XRP' },
+        // XRP - PMC €0.4999 (solo primo acquisto conta per PMC)
+        { id: 1, date: '2024-09-04', type: 'BUY', asset: 'XRP', qty: 10001.87, priceEUR: 0.4999, note: 'Revolut - Acquisti XRP consolidati' },
 
-        // HBAR - Acquisti Dec 2024 - Nov 2025
-        { id: 4, date: '2024-12-09', type: 'BUY', asset: 'HBAR', qty: 10005.10, priceEUR: 0.2037, note: 'Nexo SWAP EUR→HBAR + cashback' },
-        { id: 5, date: '2025-09-26', type: 'BUY', asset: 'HBAR', qty: 10000, priceEUR: 0.1825, note: 'Uphold - HBAR' },
-        { id: 6, date: '2025-11-10', type: 'BUY', asset: 'HBAR', qty: 10000, priceEUR: 0.1685, note: 'Uphold - HBAR discount' },
-        { id: 7, date: '2025-11-19', type: 'BUY', asset: 'HBAR', qty: 10000, priceEUR: 0.1232, note: 'Uphold - HBAR zona accumulo' },
+        // HBAR - PMC €0.1676
+        { id: 4, date: '2024-12-09', type: 'BUY', asset: 'HBAR', qty: 40082.41, priceEUR: 0.1676, note: 'Acquisti HBAR consolidati' },
 
-        // XDC - Acquisti Aug-Nov 2025
-        { id: 8, date: '2025-08-30', type: 'BUY', asset: 'XDC', qty: 25000, priceEUR: 0.0700, note: 'Uphold - Prima tranche XDC' },
-        { id: 9, date: '2025-09-04', type: 'BUY', asset: 'XDC', qty: 30000, priceEUR: 0.0689, note: 'Uphold - Accumulo XDC' },
-        { id: 10, date: '2025-09-11', type: 'BUY', asset: 'XDC', qty: 15000, priceEUR: 0.0668, note: 'Uphold - Terza tranche XDC' },
-        { id: 11, date: '2025-09-26', type: 'BUY', asset: 'XDC', qty: 30000, priceEUR: 0.0640, note: 'Uphold - Quarta tranche XDC' },
-        { id: 12, date: '2025-11-04', type: 'BUY', asset: 'XDC', qty: 211.82, priceEUR: 0.0472, note: 'Uphold - Test XDC' },
+        // XDC - PMC €0.06692
+        { id: 8, date: '2025-08-30', type: 'BUY', asset: 'XDC', qty: 100402.25, priceEUR: 0.06692, note: 'Acquisti XDC consolidati' },
 
-        // QNT - Acquisti Aug-Dec 2025
-        { id: 13, date: '2025-08-21', type: 'BUY', asset: 'QNT', qty: 29.6711, priceEUR: 117.80, note: 'Swap XLM→QNT via Exodus (origine €3495)' },
-        { id: 14, date: '2025-11-22', type: 'BUY', asset: 'QNT', qty: 30, priceEUR: 64.135, note: 'Uphold - QNT' },
-        { id: 15, date: '2025-11-22', type: 'BUY', asset: 'QNT', qty: 1, priceEUR: 13.00, note: 'Uphold - Test QNT' },
-        { id: 16, date: '2025-12-16', type: 'BUY', asset: 'QNT', qty: 10.01138597, priceEUR: 66.42, note: 'Binance SWAP EUR→QNT' }
+        // QNT - PMC €64.44 (swap XLM→QNT non conta, solo acquisti diretti EUR)
+        { id: 14, date: '2025-11-22', type: 'BUY', asset: 'QNT', qty: 70.68, priceEUR: 64.44, note: 'Acquisti QNT consolidati' }
     ],
     
     // Default Portfolio (solo struttura base - i valori vengono calcolati da TRANSACTIONS)
