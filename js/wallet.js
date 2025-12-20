@@ -539,8 +539,9 @@ const Wallet = {
         if (!accountId) return [];
 
         try {
-            // Rimuovi filtro transactiontype per catturare tutte le transazioni
-            const url = `${this.APIS.HBAR}/api/v1/transactions?account.id=${accountId}&limit=100&order=asc`;
+            // Usa order=desc per ottenere le transazioni più recenti (dove ci sono gli acquisti)
+            // Aumenta limit a 200 per catturare più storico
+            const url = `${this.APIS.HBAR}/api/v1/transactions?account.id=${accountId}&limit=200&order=desc`;
             const response = await fetch(url);
             const data = await response.json();
             const transactions = [];
@@ -562,9 +563,9 @@ const Wallet = {
                             // Skip se già processato (deduplicazione)
                             if (seenHashes.has(txId)) continue;
 
-                            // Skip importi molto piccoli (rewards/dust) - considera solo acquisti significativi
-                            // Un acquisto tipico è > 100 HBAR
-                            if (amount > 100) {
+                            // Skip importi molto piccoli (rewards/dust) - considera solo trasferimenti significativi
+                            // Soglia abbassata a 50 HBAR per catturare più transazioni
+                            if (amount > 50) {
                                 seenHashes.add(txId);
                                 transactions.push({
                                     type: 'BUY',
@@ -580,6 +581,9 @@ const Wallet = {
                     }
                 }
             }
+
+            // Ordina per timestamp crescente (cronologico)
+            transactions.sort((a, b) => a.timestamp - b.timestamp);
 
             console.log(`HBAR: Trovate ${transactions.length} transazioni significative`);
             return transactions;
