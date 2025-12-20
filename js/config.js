@@ -75,31 +75,47 @@ const CONFIG = {
         XDC: [0.03, 0.04, 0.05, 0.06, 0.07]
     },
     
-    // Transaction History (date corrette: tutte nel 2024)
+    // Transaction History (dati reali da Crypto Ledger Tracker)
+    // Prezzi in EUR (priceEUR) - calcolati da eurAmount/amount
     TRANSACTIONS: [
-        { id: 1, date: '2024-08-30', type: 'BUY', asset: 'XRP', qty: 10001.87, price: 0.5795, note: 'Prima posizione XRP' },
-        { id: 2, date: '2024-08-29', type: 'BUY', asset: 'HBAR', qty: 10005.10, price: 0.2360, note: 'Entrata HBAR' },
-        { id: 3, date: '2024-08-30', type: 'BUY', asset: 'XDC', qty: 25000, price: 0.08115, note: 'Prima tranche XDC' },
-        { id: 4, date: '2024-09-04', type: 'BUY', asset: 'XDC', qty: 30000, price: 0.07988, note: 'Accumulo XDC' },
-        { id: 5, date: '2024-09-11', type: 'BUY', asset: 'XDC', qty: 15000, price: 0.07744, note: 'Terza tranche XDC' },
-        { id: 6, date: '2024-09-26', type: 'BUY', asset: 'HBAR', qty: 10000, price: 0.2068, note: 'Accumulo HBAR' },
-        { id: 7, date: '2024-09-26', type: 'BUY', asset: 'XDC', qty: 30000, price: 0.07241, note: 'Quarta tranche XDC' },
-        { id: 8, date: '2024-11-10', type: 'BUY', asset: 'HBAR', qty: 10000, price: 0.1952, note: 'HBAR in discount' },
-        { id: 9, date: '2024-11-19', type: 'BUY', asset: 'HBAR', qty: 10000, price: 0.1392, note: 'HBAR zona accumulo' },
-        { id: 10, date: '2024-11-22', type: 'BUY', asset: 'QNT', qty: 30.36, price: 73.05, note: 'Prima posizione QNT' },
-        { id: 11, date: '2024-11-22', type: 'BUY', asset: 'QNT', qty: 29.68, price: 75.64, note: 'Seconda tranche QNT' }
+        // XRP - Acquisti Sept 2024
+        { id: 1, date: '2024-09-04', type: 'BUY', asset: 'XRP', qty: 4001.54, priceEUR: 0.4998, note: 'Revolut - Prima posizione XRP' },
+        { id: 2, date: '2024-09-29', type: 'BUY', asset: 'XRP', qty: 3516.80, priceEUR: 0.6057, note: 'Revolut - Accumulo XRP' },
+        { id: 3, date: '2024-09-29', type: 'BUY', asset: 'XRP', qty: 2564.74, priceEUR: 0.6081, note: 'Revolut - Terza tranche XRP' },
+
+        // HBAR - Acquisti Dec 2024 - Nov 2025
+        { id: 4, date: '2024-12-09', type: 'BUY', asset: 'HBAR', qty: 10005.10, priceEUR: 0.2037, note: 'Nexo SWAP EUR→HBAR + cashback' },
+        { id: 5, date: '2025-09-26', type: 'BUY', asset: 'HBAR', qty: 10000, priceEUR: 0.1825, note: 'Uphold - HBAR' },
+        { id: 6, date: '2025-11-10', type: 'BUY', asset: 'HBAR', qty: 10000, priceEUR: 0.1685, note: 'Uphold - HBAR discount' },
+        { id: 7, date: '2025-11-19', type: 'BUY', asset: 'HBAR', qty: 10000, priceEUR: 0.1232, note: 'Uphold - HBAR zona accumulo' },
+
+        // XDC - Acquisti Aug-Nov 2025
+        { id: 8, date: '2025-08-30', type: 'BUY', asset: 'XDC', qty: 25000, priceEUR: 0.0700, note: 'Uphold - Prima tranche XDC' },
+        { id: 9, date: '2025-09-04', type: 'BUY', asset: 'XDC', qty: 30000, priceEUR: 0.0689, note: 'Uphold - Accumulo XDC' },
+        { id: 10, date: '2025-09-11', type: 'BUY', asset: 'XDC', qty: 15000, priceEUR: 0.0668, note: 'Uphold - Terza tranche XDC' },
+        { id: 11, date: '2025-09-26', type: 'BUY', asset: 'XDC', qty: 30000, priceEUR: 0.0640, note: 'Uphold - Quarta tranche XDC' },
+        { id: 12, date: '2025-11-04', type: 'BUY', asset: 'XDC', qty: 211.82, priceEUR: 0.0472, note: 'Uphold - Test XDC' },
+
+        // QNT - Acquisti Nov 2025
+        { id: 13, date: '2025-08-21', type: 'BUY', asset: 'QNT', qty: 29.67, priceEUR: 117.80, note: 'Swap XLM→QNT via Exodus (origine €3495)' },
+        { id: 14, date: '2025-11-22', type: 'BUY', asset: 'QNT', qty: 30, priceEUR: 64.135, note: 'Uphold - QNT' },
+        { id: 15, date: '2025-11-22', type: 'BUY', asset: 'QNT', qty: 1, priceEUR: 13.00, note: 'Uphold - Test QNT' }
     ],
     
-    // Default Portfolio
-    // costBasis = costo totale investito in USD (calcolato dalle transazioni)
+    // Default Portfolio (calcolato da transazioni reali)
+    // costBasisEUR = costo totale investito in EUR
+    // avgPriceEUR = prezzo medio di acquisto in EUR
     // originalQty = quantità originale comprata (per calcolo P&L)
-    // qty = quantità attuale (può cambiare con wallet sync)
-    // Nota: costBasis e originalQty NON cambiano con wallet sync
+    // qty = quantità attuale (aggiornata da wallet sync)
     DEFAULT_PORTFOLIO: [
-        { symbol: 'XRP', name: 'XRP', qty: 10001.87, originalQty: 10001.87, avgPrice: 0.5795, costBasis: 5796.08 },
-        { symbol: 'QNT', name: 'Quant', qty: 60.04, originalQty: 60.04, avgPrice: 74.29, costBasis: 4462.79 },
-        { symbol: 'HBAR', name: 'Hedera', qty: 40005.10, originalQty: 40005.10, avgPrice: 0.1942, costBasis: 7773.20 },
-        { symbol: 'XDC', name: 'XDC Network', qty: 100000, originalQty: 100000, avgPrice: 0.07755, costBasis: 7759.05 }
+        // XRP: €5689.54 investiti per 10083.08 XRP = €0.5643/XRP
+        { symbol: 'XRP', name: 'XRP', qty: 10001.87, originalQty: 10083.08, avgPriceEUR: 0.5643, costBasisEUR: 5689.54 },
+        // QNT: €5432 investiti per 60.67 QNT = €89.54/QNT
+        { symbol: 'QNT', name: 'Quant', qty: 70.04, originalQty: 60.67, avgPriceEUR: 89.54, costBasisEUR: 5432 },
+        // HBAR: €6780 investiti per 40005.10 HBAR = €0.1695/HBAR
+        { symbol: 'HBAR', name: 'Hedera', qty: 40082.41, originalQty: 40005.10, avgPriceEUR: 0.1695, costBasisEUR: 6780 },
+        // XDC: €6749 investiti per 100211.82 XDC = €0.0674/XDC
+        { symbol: 'XDC', name: 'XDC Network', qty: 100402.25, originalQty: 100211.82, avgPriceEUR: 0.0674, costBasisEUR: 6749 }
     ],
     
     // LocalStorage Keys
@@ -180,22 +196,31 @@ function sanitizePortfolio(portfolio) {
     let needsSave = false;
     portfolio.forEach(asset => {
         const savedQty = asset.qty;
-        const savedPrice = asset.avgPrice;
         asset.qty = parseFloat(asset.qty) || 0;
-        asset.avgPrice = parseFloat(asset.avgPrice) || 0;
 
         // Get defaults for this asset
         const defaultAsset = CONFIG.DEFAULT_PORTFOLIO.find(d => d.symbol === asset.symbol);
 
-        // Ensure costBasis exists (copy from defaults if missing)
-        if (asset.costBasis === undefined || asset.costBasis === null) {
-            if (defaultAsset && defaultAsset.costBasis) {
-                asset.costBasis = defaultAsset.costBasis;
+        // Ensure costBasisEUR exists (copy from defaults if missing)
+        if (asset.costBasisEUR === undefined || asset.costBasisEUR === null) {
+            if (defaultAsset && defaultAsset.costBasisEUR) {
+                asset.costBasisEUR = defaultAsset.costBasisEUR;
                 needsSave = true;
-                console.log(`Added costBasis for ${asset.symbol}: $${asset.costBasis}`);
+                console.log(`Added costBasisEUR for ${asset.symbol}: €${asset.costBasisEUR}`);
             }
         } else {
-            asset.costBasis = parseFloat(asset.costBasis) || 0;
+            asset.costBasisEUR = parseFloat(asset.costBasisEUR) || 0;
+        }
+
+        // Ensure avgPriceEUR exists
+        if (asset.avgPriceEUR === undefined || asset.avgPriceEUR === null) {
+            if (defaultAsset && defaultAsset.avgPriceEUR) {
+                asset.avgPriceEUR = defaultAsset.avgPriceEUR;
+                needsSave = true;
+                console.log(`Added avgPriceEUR for ${asset.symbol}: €${asset.avgPriceEUR}`);
+            }
+        } else {
+            asset.avgPriceEUR = parseFloat(asset.avgPriceEUR) || 0;
         }
 
         // Ensure originalQty exists (copy from defaults if missing)
@@ -214,9 +239,9 @@ function sanitizePortfolio(portfolio) {
             asset.originalQty = parseFloat(asset.originalQty) || 0;
         }
 
-        if (savedQty !== asset.qty || savedPrice !== asset.avgPrice) {
+        if (savedQty !== asset.qty) {
             needsSave = true;
-            console.warn(`Fixed corrupted data for ${asset.symbol}: qty=${savedQty}->${asset.qty}, avgPrice=${savedPrice}->${asset.avgPrice}`);
+            console.warn(`Fixed corrupted qty for ${asset.symbol}: ${savedQty}->${asset.qty}`);
         }
     });
     return needsSave;

@@ -67,16 +67,15 @@ const Portfolio = {
     },
 
     // Get total invested
-    // Usa costBasis se disponibile, altrimenti calcola da transazioni o qty*avgPrice
+    // I costi sono memorizzati in EUR (costBasisEUR, avgPriceEUR, priceEUR)
     getTotalInvested() {
         let total = 0;
-        const rate = this.getConversionRate();
 
         state.portfolio.forEach(asset => {
-            // Priorità: costBasis > calcolo da transazioni > qty*avgPrice
-            if (asset.costBasis !== undefined && asset.costBasis > 0) {
-                // Usa il costo base memorizzato (in USD)
-                total += asset.costBasis * rate;
+            // Priorità: costBasisEUR > calcolo da transazioni > avgPriceEUR
+            if (asset.costBasisEUR !== undefined && asset.costBasisEUR > 0) {
+                // Usa il costo base memorizzato in EUR
+                total += asset.costBasisEUR;
             } else {
                 // Fallback: calcola dalle transazioni per questo asset
                 const assetTxs = state.transactions.filter(
@@ -84,21 +83,39 @@ const Portfolio = {
                 );
 
                 if (assetTxs.length > 0) {
-                    // Calcola costo totale dalle transazioni
+                    // Calcola costo totale dalle transazioni (usa priceEUR)
                     let txCost = 0;
                     assetTxs.forEach(tx => {
-                        txCost += (parseFloat(tx.qty) || 0) * (parseFloat(tx.price) || 0);
+                        const price = parseFloat(tx.priceEUR) || parseFloat(tx.price) || 0;
+                        txCost += (parseFloat(tx.qty) || 0) * price;
                     });
-                    total += txCost * rate;
+                    total += txCost;
                 } else {
-                    // Ultimo fallback: usa avgPrice * qty originale (dal config)
+                    // Ultimo fallback: usa avgPriceEUR * qty originale
                     const originalQty = this.getOriginalQty(asset.symbol);
-                    const avgPrice = parseFloat(asset.avgPrice) || 0;
-                    total += originalQty * avgPrice * rate;
+                    const avgPrice = parseFloat(asset.avgPriceEUR) || parseFloat(asset.avgPrice) || 0;
+                    total += originalQty * avgPrice;
                 }
             }
         });
+
+        // Converti in valuta corrente se non EUR
+        if (state.currency !== 'EUR') {
+            const eurToUsdRate = this.getEurToUsdRate();
+            total *= eurToUsdRate;
+        }
+
         return total;
+    },
+
+    // Tasso EUR → USD
+    getEurToUsdRate() {
+        const btcEur = state.prices['BTC']?.EUR?.PRICE;
+        const btcUsd = state.prices['BTC']?.USD?.PRICE;
+        if (btcEur && btcUsd) {
+            return btcUsd / btcEur;
+        }
+        return 1.08; // Fallback
     },
 
     // Ottiene la quantità originale (prima del sync wallet)
