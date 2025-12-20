@@ -57,29 +57,31 @@ const CONFIG = {
         XDC: [0.03, 0.04, 0.05, 0.06, 0.07]
     },
     
-    // Transaction History
+    // Transaction History (date corrette: tutte nel 2024)
     TRANSACTIONS: [
         { id: 1, date: '2024-08-30', type: 'BUY', asset: 'XRP', qty: 10001.87, price: 0.5795, note: 'Prima posizione XRP' },
-        { id: 2, date: '2025-08-29', type: 'BUY', asset: 'HBAR', qty: 10005.10, price: 0.2360, note: 'Entrata HBAR' },
-        { id: 3, date: '2025-08-30', type: 'BUY', asset: 'XDC', qty: 25000, price: 0.08115, note: 'Prima tranche XDC' },
-        { id: 4, date: '2025-09-04', type: 'BUY', asset: 'XDC', qty: 30000, price: 0.07988, note: 'Accumulo XDC' },
-        { id: 5, date: '2025-09-11', type: 'BUY', asset: 'XDC', qty: 15000, price: 0.07744, note: 'Terza tranche XDC' },
-        { id: 6, date: '2025-09-26', type: 'BUY', asset: 'HBAR', qty: 10000, price: 0.2068, note: 'Accumulo HBAR' },
-        { id: 7, date: '2025-09-26', type: 'BUY', asset: 'XDC', qty: 30000, price: 0.07241, note: 'Quarta tranche XDC' },
-        { id: 8, date: '2025-11-10', type: 'BUY', asset: 'HBAR', qty: 10000, price: 0.1952, note: 'HBAR in discount' },
-        { id: 9, date: '2025-11-19', type: 'BUY', asset: 'HBAR', qty: 10000, price: 0.1392, note: 'HBAR zona accumulo' },
-        { id: 10, date: '2025-11-22', type: 'BUY', asset: 'QNT', qty: 30.36, price: 73.05, note: 'Prima posizione QNT' },
-        { id: 11, date: '2025-11-22', type: 'BUY', asset: 'QNT', qty: 29.68, price: 75.64, note: 'Seconda tranche QNT' }
+        { id: 2, date: '2024-08-29', type: 'BUY', asset: 'HBAR', qty: 10005.10, price: 0.2360, note: 'Entrata HBAR' },
+        { id: 3, date: '2024-08-30', type: 'BUY', asset: 'XDC', qty: 25000, price: 0.08115, note: 'Prima tranche XDC' },
+        { id: 4, date: '2024-09-04', type: 'BUY', asset: 'XDC', qty: 30000, price: 0.07988, note: 'Accumulo XDC' },
+        { id: 5, date: '2024-09-11', type: 'BUY', asset: 'XDC', qty: 15000, price: 0.07744, note: 'Terza tranche XDC' },
+        { id: 6, date: '2024-09-26', type: 'BUY', asset: 'HBAR', qty: 10000, price: 0.2068, note: 'Accumulo HBAR' },
+        { id: 7, date: '2024-09-26', type: 'BUY', asset: 'XDC', qty: 30000, price: 0.07241, note: 'Quarta tranche XDC' },
+        { id: 8, date: '2024-11-10', type: 'BUY', asset: 'HBAR', qty: 10000, price: 0.1952, note: 'HBAR in discount' },
+        { id: 9, date: '2024-11-19', type: 'BUY', asset: 'HBAR', qty: 10000, price: 0.1392, note: 'HBAR zona accumulo' },
+        { id: 10, date: '2024-11-22', type: 'BUY', asset: 'QNT', qty: 30.36, price: 73.05, note: 'Prima posizione QNT' },
+        { id: 11, date: '2024-11-22', type: 'BUY', asset: 'QNT', qty: 29.68, price: 75.64, note: 'Seconda tranche QNT' }
     ],
     
     // Default Portfolio
     // costBasis = costo totale investito in USD (calcolato dalle transazioni)
-    // Non cambia quando la qty viene aggiornata dal wallet sync
+    // originalQty = quantità originale comprata (per calcolo P&L)
+    // qty = quantità attuale (può cambiare con wallet sync)
+    // Nota: costBasis e originalQty NON cambiano con wallet sync
     DEFAULT_PORTFOLIO: [
-        { symbol: 'XRP', name: 'XRP', qty: 10001.87, avgPrice: 0.5795, costBasis: 5796.08 },
-        { symbol: 'QNT', name: 'Quant', qty: 60.04, avgPrice: 74.29, costBasis: 4462.79 },
-        { symbol: 'HBAR', name: 'Hedera', qty: 40005.10, avgPrice: 0.1942, costBasis: 7773.20 },
-        { symbol: 'XDC', name: 'XDC Network', qty: 100000, avgPrice: 0.07755, costBasis: 7759.05 }
+        { symbol: 'XRP', name: 'XRP', qty: 10001.87, originalQty: 10001.87, avgPrice: 0.5795, costBasis: 5796.08 },
+        { symbol: 'QNT', name: 'Quant', qty: 60.04, originalQty: 60.04, avgPrice: 74.29, costBasis: 4462.79 },
+        { symbol: 'HBAR', name: 'Hedera', qty: 40005.10, originalQty: 40005.10, avgPrice: 0.1942, costBasis: 7773.20 },
+        { symbol: 'XDC', name: 'XDC Network', qty: 100000, originalQty: 100000, avgPrice: 0.07755, costBasis: 7759.05 }
     ],
     
     // LocalStorage Keys
@@ -159,14 +161,16 @@ function sanitizePortfolio(portfolio) {
     // Fix corrupted data (strings instead of numbers)
     let needsSave = false;
     portfolio.forEach(asset => {
-        const originalQty = asset.qty;
-        const originalPrice = asset.avgPrice;
+        const savedQty = asset.qty;
+        const savedPrice = asset.avgPrice;
         asset.qty = parseFloat(asset.qty) || 0;
         asset.avgPrice = parseFloat(asset.avgPrice) || 0;
 
+        // Get defaults for this asset
+        const defaultAsset = CONFIG.DEFAULT_PORTFOLIO.find(d => d.symbol === asset.symbol);
+
         // Ensure costBasis exists (copy from defaults if missing)
         if (asset.costBasis === undefined || asset.costBasis === null) {
-            const defaultAsset = CONFIG.DEFAULT_PORTFOLIO.find(d => d.symbol === asset.symbol);
             if (defaultAsset && defaultAsset.costBasis) {
                 asset.costBasis = defaultAsset.costBasis;
                 needsSave = true;
@@ -176,9 +180,25 @@ function sanitizePortfolio(portfolio) {
             asset.costBasis = parseFloat(asset.costBasis) || 0;
         }
 
-        if (originalQty !== asset.qty || originalPrice !== asset.avgPrice) {
+        // Ensure originalQty exists (copy from defaults if missing)
+        // originalQty is the amount we originally bought - never changes with wallet sync
+        if (asset.originalQty === undefined || asset.originalQty === null) {
+            if (defaultAsset && defaultAsset.originalQty) {
+                asset.originalQty = defaultAsset.originalQty;
+                needsSave = true;
+                console.log(`Added originalQty for ${asset.symbol}: ${asset.originalQty}`);
+            } else {
+                // Fallback: use current qty as original
+                asset.originalQty = asset.qty;
+                needsSave = true;
+            }
+        } else {
+            asset.originalQty = parseFloat(asset.originalQty) || 0;
+        }
+
+        if (savedQty !== asset.qty || savedPrice !== asset.avgPrice) {
             needsSave = true;
-            console.warn(`Fixed corrupted data for ${asset.symbol}: qty=${originalQty}->${asset.qty}, avgPrice=${originalPrice}->${asset.avgPrice}`);
+            console.warn(`Fixed corrupted data for ${asset.symbol}: qty=${savedQty}->${asset.qty}, avgPrice=${savedPrice}->${asset.avgPrice}`);
         }
     });
     return needsSave;

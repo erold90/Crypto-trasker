@@ -16,6 +16,12 @@ const Wallet = {
     // Last sync timestamp
     lastSync: null,
 
+    // Race condition guard
+    isSyncing: false,
+
+    // Default timeout for API calls (10 seconds)
+    API_TIMEOUT: 10000,
+
     // API endpoints
     APIS: {
         XRP: 'https://xrplcluster.com',
@@ -38,6 +44,29 @@ const Wallet = {
     init() {
         this.loadAddresses();
         this.loadLastSync();
+    },
+
+    // Fetch with timeout wrapper
+    async fetchWithTimeout(url, options = {}, timeout = null) {
+        const controller = new AbortController();
+        const timeoutMs = timeout || this.API_TIMEOUT;
+
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+        try {
+            const response = await fetch(url, {
+                ...options,
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+            return response;
+        } catch (e) {
+            clearTimeout(timeoutId);
+            if (e.name === 'AbortError') {
+                throw new Error(`Timeout dopo ${timeoutMs / 1000}s`);
+            }
+            throw e;
+        }
     },
 
     // Load addresses from localStorage or defaults
@@ -82,7 +111,7 @@ const Wallet = {
         if (!address) return null;
 
         try {
-            const response = await fetch(this.APIS.XRP, {
+            const response = await this.fetchWithTimeout(this.APIS.XRP, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -105,7 +134,7 @@ const Wallet = {
             console.warn('XRP balance not found:', data);
             return null;
         } catch (e) {
-            console.error('Error fetching XRP balance:', e);
+            console.error('Error fetching XRP balance:', e.message);
             return null;
         }
     },
@@ -118,7 +147,7 @@ const Wallet = {
             // Using Etherscan V2 API with chainid=1 (Ethereum mainnet)
             const url = `${this.APIS.ETHEREUM}?chainid=1&module=account&action=tokenbalance&contractaddress=${this.QNT_CONTRACT}&address=${address}&tag=latest&apikey=${this.ETHERSCAN_API_KEY}`;
 
-            const response = await fetch(url);
+            const response = await this.fetchWithTimeout(url);
             const data = await response.json();
 
             if (data.status === '1' && data.result) {
@@ -130,7 +159,7 @@ const Wallet = {
             console.warn('QNT balance not found:', data);
             return null;
         } catch (e) {
-            console.error('Error fetching QNT balance:', e);
+            console.error('Error fetching QNT balance:', e.message);
             return null;
         }
     },
@@ -141,7 +170,7 @@ const Wallet = {
 
         try {
             const url = `${this.APIS.HBAR}/api/v1/accounts/${accountId}`;
-            const response = await fetch(url);
+            const response = await this.fetchWithTimeout(url);
             const data = await response.json();
 
             if (data.balance?.balance !== undefined) {
@@ -153,7 +182,7 @@ const Wallet = {
             console.warn('HBAR balance not found:', data);
             return null;
         } catch (e) {
-            console.error('Error fetching HBAR balance:', e);
+            console.error('Error fetching HBAR balance:', e.message);
             return null;
         }
     },
@@ -174,7 +203,7 @@ const Wallet = {
             // 1. Try BlocksScan API first
             try {
                 const nativeUrl = `${this.APIS.XDC}?module=account&action=balance&address=${normalizedAddress}`;
-                const nativeResponse = await fetch(nativeUrl, { timeout: 5000 });
+                const nativeResponse = await this.fetchWithTimeout(nativeUrl, {}, 5000);
 
                 if (nativeResponse.ok) {
                     const nativeData = await nativeResponse.json();
@@ -187,14 +216,14 @@ const Wallet = {
                     useRpcFallback = true;
                 }
             } catch (e) {
-                console.warn('BlocksScan API failed, using RPC fallback');
+                console.warn('BlocksScan API failed, using RPC fallback:', e.message);
                 useRpcFallback = true;
             }
 
             // 1b. Fallback to RPC if BlocksScan fails
             if (useRpcFallback) {
                 try {
-                    const rpcResponse = await fetch(this.APIS.XDC_RPC, {
+                    const rpcResponse = await this.fetchWithTimeout(this.APIS.XDC_RPC, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -211,7 +240,7 @@ const Wallet = {
                         console.log(`XDC native balance (RPC): ${nativeBalance}`);
                     }
                 } catch (e) {
-                    console.error('XDC RPC fallback failed:', e);
+                    console.error('XDC RPC fallback failed:', e.message);
                 }
             }
 
@@ -221,7 +250,7 @@ const Wallet = {
                 const paddedAddress = normalizedAddress.replace('0x', '').toLowerCase().padStart(64, '0');
                 const data = '0x70a08231' + paddedAddress;
 
-                const rpcResponse = await fetch(this.APIS.XDC_RPC, {
+                const rpcResponse = await this.fetchWithTimeout(this.APIS.XDC_RPC, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -251,7 +280,7 @@ const Wallet = {
             console.log(`XDC total balance: ${totalBalance}`);
             return totalBalance > 0 ? totalBalance : null;
         } catch (e) {
-            console.error('Error fetching XDC balance:', e);
+            console.error('Error fetching XDC balance:', e.message);
             return null;
         }
     },
@@ -282,61 +311,73 @@ const Wallet = {
 
     // Sync all wallet balances
     async syncAll() {
+        // Race condition guard - prevent multiple concurrent syncs
+        if (this.isSyncing) {
+            console.warn('Sync already in progress, skipping...');
+            return { success: [], failed: [], unchanged: [], skipped: true };
+        }
+
+        this.isSyncing = true;
+
         const results = {
             success: [],
             failed: [],
             unchanged: []
         };
 
-        for (const asset of state.portfolio) {
-            const address = this.getAddress(asset.symbol);
+        try {
+            for (const asset of state.portfolio) {
+                const address = this.getAddress(asset.symbol);
 
-            if (!address) {
-                results.unchanged.push(asset.symbol);
-                continue;
-            }
+                if (!address) {
+                    results.unchanged.push(asset.symbol);
+                    continue;
+                }
 
-            try {
-                const balance = await this.fetchBalance(asset.symbol);
+                try {
+                    const balance = await this.fetchBalance(asset.symbol);
 
-                if (balance !== null && !isNaN(balance) && balance >= 0) {
-                    const oldQty = parseFloat(asset.qty) || 0;
+                    if (balance !== null && !isNaN(balance) && balance >= 0) {
+                        const oldQty = parseFloat(asset.qty) || 0;
 
-                    // Protezione: non sovrascrivere con 0 se avevamo un saldo valido
-                    if (balance === 0 && oldQty > 0) {
-                        console.warn(`${asset.symbol}: API ha restituito 0, ma avevamo ${oldQty}. Skipping.`);
-                        results.failed.push(asset.symbol);
-                        continue;
-                    }
+                        // Protezione: non sovrascrivere con 0 se avevamo un saldo valido
+                        if (balance === 0 && oldQty > 0) {
+                            console.warn(`${asset.symbol}: API ha restituito 0, ma avevamo ${oldQty}. Skipping.`);
+                            results.failed.push(asset.symbol);
+                            continue;
+                        }
 
-                    asset.qty = balance;
+                        asset.qty = balance;
 
-                    if (Math.abs(oldQty - balance) > 0.0001) {
-                        results.success.push({
-                            symbol: asset.symbol,
-                            oldQty,
-                            newQty: balance
-                        });
+                        if (Math.abs(oldQty - balance) > 0.0001) {
+                            results.success.push({
+                                symbol: asset.symbol,
+                                oldQty,
+                                newQty: balance
+                            });
+                        } else {
+                            results.unchanged.push(asset.symbol);
+                        }
                     } else {
-                        results.unchanged.push(asset.symbol);
+                        results.failed.push(asset.symbol);
                     }
-                } else {
+                } catch (e) {
+                    console.error(`Error syncing ${asset.symbol}:`, e.message);
                     results.failed.push(asset.symbol);
                 }
-            } catch (e) {
-                console.error(`Error syncing ${asset.symbol}:`, e);
-                results.failed.push(asset.symbol);
             }
-        }
 
-        // Save updated portfolio
-        if (results.success.length > 0) {
-            savePortfolio();
-        }
+            // Save updated portfolio
+            if (results.success.length > 0) {
+                savePortfolio();
+            }
 
-        // Update last sync timestamp
-        this.lastSync = new Date();
-        this.saveLastSync();
+            // Update last sync timestamp
+            this.lastSync = new Date();
+            this.saveLastSync();
+        } finally {
+            this.isSyncing = false;
+        }
 
         return results;
     },

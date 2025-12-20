@@ -2,8 +2,53 @@
 // CRYPTO PORTFOLIO TRACKER - PORTFOLIO MODULE
 // ============================================
 
+// Input validation helpers
+const Validation = {
+    // Validate symbol (alphanumeric, 1-10 chars)
+    symbol(symbol) {
+        if (!symbol || typeof symbol !== 'string') return null;
+        const clean = symbol.toUpperCase().trim();
+        if (!/^[A-Z0-9]{1,10}$/.test(clean)) return null;
+        return clean;
+    },
+
+    // Validate name (sanitize XSS, max 50 chars)
+    name(name, fallback = '') {
+        if (!name || typeof name !== 'string') return fallback;
+        // Remove HTML tags and limit length
+        return name.replace(/<[^>]*>/g, '').trim().substring(0, 50) || fallback;
+    },
+
+    // Validate positive number
+    positiveNumber(value) {
+        const num = parseFloat(value);
+        if (!Number.isFinite(num) || num < 0) return null;
+        return num;
+    },
+
+    // Validate non-zero positive number
+    nonZeroNumber(value) {
+        const num = this.positiveNumber(value);
+        if (num === null || num === 0) return null;
+        return num;
+    }
+};
+
 const Portfolio = {
-    
+
+    // Memoization cache for portfolio history
+    _historyCache: {
+        data: null,
+        timeRange: null,
+        txCount: null,
+        lastUpdate: null
+    },
+
+    // Invalidate history cache (call when data changes)
+    invalidateHistoryCache() {
+        this._historyCache.data = null;
+    },
+
     // Get current price for symbol
     getPrice(symbol, currency = null) {
         const curr = currency || state.currency;
@@ -56,10 +101,23 @@ const Portfolio = {
         return total;
     },
 
-    // Ottiene la quantità originale dal CONFIG (prima del sync wallet)
+    // Ottiene la quantità originale (prima del sync wallet)
+    // Priorità: asset.originalQty > CONFIG.DEFAULT_PORTFOLIO.originalQty > asset.qty
     getOriginalQty(symbol) {
+        // Prima cerca nell'asset corrente
+        const asset = state.portfolio.find(a => a.symbol === symbol);
+        if (asset && asset.originalQty !== undefined && asset.originalQty > 0) {
+            return parseFloat(asset.originalQty);
+        }
+
+        // Fallback al CONFIG
         const defaultAsset = CONFIG.DEFAULT_PORTFOLIO.find(a => a.symbol === symbol);
-        return defaultAsset ? parseFloat(defaultAsset.qty) || 0 : 0;
+        if (defaultAsset) {
+            return parseFloat(defaultAsset.originalQty || defaultAsset.qty) || 0;
+        }
+
+        // Ultimo fallback: qty corrente
+        return asset ? parseFloat(asset.qty) || 0 : 0;
     },
     
     // Get conversion rate (USD to current currency)
@@ -104,12 +162,25 @@ const Portfolio = {
     
     // Add new asset
     addAsset(symbol, name, qty, avgPrice) {
-        // Check if already exists
-        const existing = state.portfolio.find(a => a.symbol === symbol.toUpperCase());
+        // Validate inputs
+        const validSymbol = Validation.symbol(symbol);
+        if (!validSymbol) {
+            console.error('addAsset: Invalid symbol:', symbol);
+            return false;
+        }
 
-        // Ensure numeric values
-        const qtyNum = parseFloat(qty);
-        const priceNum = parseFloat(avgPrice);
+        const qtyNum = Validation.positiveNumber(qty);
+        const priceNum = Validation.positiveNumber(avgPrice);
+
+        if (qtyNum === null || priceNum === null) {
+            console.error('addAsset: Invalid qty or price:', qty, avgPrice);
+            return false;
+        }
+
+        const validName = Validation.name(name, validSymbol);
+
+        // Check if already exists
+        const existing = state.portfolio.find(a => a.symbol === validSymbol);
 
         if (existing) {
             // Update existing - calculate new average price
@@ -119,25 +190,36 @@ const Portfolio = {
             existing.qty = totalQty;
         } else {
             state.portfolio.push({
-                symbol: symbol.toUpperCase(),
-                name: name || symbol.toUpperCase(),
-                qty: parseFloat(qty),
-                avgPrice: parseFloat(avgPrice)
+                symbol: validSymbol,
+                name: validName,
+                qty: qtyNum,
+                avgPrice: priceNum
             });
         }
-        
+
         savePortfolio();
         return true;
     },
     
     // Update asset
     updateAsset(symbol, qty, avgPrice) {
-        const asset = state.portfolio.find(a => a.symbol === symbol);
+        const validSymbol = Validation.symbol(symbol);
+        if (!validSymbol) return false;
+
+        const asset = state.portfolio.find(a => a.symbol === validSymbol);
         if (!asset) return false;
-        
-        asset.qty = parseFloat(qty);
-        asset.avgPrice = parseFloat(avgPrice);
-        
+
+        const qtyNum = Validation.positiveNumber(qty);
+        const priceNum = Validation.positiveNumber(avgPrice);
+
+        if (qtyNum === null || priceNum === null) {
+            console.error('updateAsset: Invalid qty or price:', qty, avgPrice);
+            return false;
+        }
+
+        asset.qty = qtyNum;
+        asset.avgPrice = priceNum;
+
         savePortfolio();
         return true;
     },
@@ -154,26 +236,52 @@ const Portfolio = {
     
     // Record a transaction
     addTransaction(type, asset, qty, price, note = '') {
+        // Validate type
+        const validType = (type || '').toUpperCase();
+        if (!['BUY', 'SELL', 'SWAP'].includes(validType)) {
+            console.error('addTransaction: Invalid type:', type);
+            return null;
+        }
+
+        // Validate asset symbol
+        const validAsset = Validation.symbol(asset);
+        if (!validAsset) {
+            console.error('addTransaction: Invalid asset:', asset);
+            return null;
+        }
+
+        // Validate qty and price
+        const qtyNum = Validation.nonZeroNumber(qty);
+        const priceNum = Validation.positiveNumber(price);
+
+        if (qtyNum === null || priceNum === null) {
+            console.error('addTransaction: Invalid qty or price:', qty, price);
+            return null;
+        }
+
+        // Sanitize note
+        const validNote = Validation.name(note, '');
+
         const tx = {
             id: Date.now(),
             date: new Date().toISOString().split('T')[0],
-            type: type.toUpperCase(), // BUY, SELL, SWAP
-            asset: asset.toUpperCase(),
-            qty: parseFloat(qty),
-            price: parseFloat(price),
-            note
+            type: validType,
+            asset: validAsset,
+            qty: qtyNum,
+            price: priceNum,
+            note: validNote
         };
-        
+
         state.transactions.push(tx);
         saveTransactions();
-        
+
         // Update portfolio based on transaction
-        if (type === 'BUY') {
-            this.addAsset(asset, asset, qty, price);
-        } else if (type === 'SELL') {
-            this.sellAsset(asset, qty);
+        if (validType === 'BUY') {
+            this.addAsset(validAsset, validAsset, qtyNum, priceNum);
+        } else if (validType === 'SELL') {
+            this.sellAsset(validAsset, qtyNum);
         }
-        
+
         return tx;
     },
     
@@ -270,12 +378,22 @@ const Portfolio = {
     // Get portfolio history (for chart)
     // Calcola il valore del portfolio in modo INCREMENTALE basandosi sulle transazioni
     // Mostra il valore reale che avevi a ogni data, non il valore attuale proiettato indietro
+    // Con memoization per evitare ricalcoli inutili
     getPortfolioHistory() {
         if (!state.portfolio.length) return [];
 
         // Use hourly data for short timeframes (1D, 1W)
         if (state.timeRange <= 7 && state.hourlyHistory) {
             return this.getHourlyPortfolioHistory();
+        }
+
+        // Check cache validity
+        const cacheKey = `${state.timeRange}-${state.transactions.length}-${state.currency}`;
+        if (this._historyCache.data &&
+            this._historyCache.key === cacheKey &&
+            this._historyCache.lastUpdate &&
+            (Date.now() - this._historyCache.lastUpdate) < 30000) {  // Cache valid for 30s
+            return this._historyCache.data;
         }
 
         const firstAsset = state.portfolio[0];
@@ -348,6 +466,13 @@ const Portfolio = {
                 invested: invested * rate  // Salva anche l'investito per questa data
             });
         }
+
+        // Update cache
+        this._historyCache = {
+            data: history,
+            key: cacheKey,
+            lastUpdate: Date.now()
+        };
 
         return history;
     },

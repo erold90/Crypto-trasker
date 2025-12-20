@@ -929,9 +929,25 @@ const UI = {
     pendingImportTransactions: null
 };
 
-// Initialize on DOM ready
-document.addEventListener('DOMContentLoaded', () => {
-    App.init();
+// Initialize on DOM ready with error boundary
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        await App.init();
+    } catch (e) {
+        console.error('Fatal error initializing app:', e);
+
+        // Show error message to user
+        const errorDiv = document.createElement('div');
+        errorDiv.style.cssText = 'position:fixed;top:0;left:0;right:0;padding:20px;background:#ef4444;color:white;text-align:center;z-index:9999;font-family:sans-serif;';
+        errorDiv.innerHTML = `
+            <strong>Errore di caricamento</strong><br>
+            <small>${e.message || 'Errore sconosciuto'}</small><br>
+            <button onclick="location.reload()" style="margin-top:10px;padding:8px 16px;background:white;color:#ef4444;border:none;border-radius:4px;cursor:pointer;">
+                Ricarica pagina
+            </button>
+        `;
+        document.body.prepend(errorDiv);
+    }
 });
 
 // Export

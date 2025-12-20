@@ -2,6 +2,14 @@
 // CRYPTO PORTFOLIO TRACKER - CALCULATOR MODULE
 // ============================================
 
+// HTML sanitization helper
+function sanitizeHTML(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 const Calculator = {
     
     // State
@@ -143,21 +151,40 @@ const Calculator = {
     renderResults(coins) {
         const resultsContainer = document.getElementById('searchResults');
         if (!resultsContainer) return;
-        
+
         if (coins.length === 0) {
             resultsContainer.innerHTML = '<div class="search-no-results">Nessun risultato</div>';
             resultsContainer.style.display = 'block';
             return;
         }
-        
-        resultsContainer.innerHTML = coins.map(coin => `
-            <div class="search-result-item" onclick="Calculator.selectCoin('${coin.symbol}', '${coin.name.replace(/'/g, "\\'")}')">
-                <span class="search-result-icon">${coin.icon}</span>
-                <span class="search-result-symbol">${coin.symbol}</span>
-                <span class="search-result-name">${coin.name}</span>
-            </div>
-        `).join('');
-        
+
+        // Clear previous results
+        resultsContainer.innerHTML = '';
+
+        // Create elements safely (no innerHTML with user data)
+        coins.forEach(coin => {
+            const item = document.createElement('div');
+            item.className = 'search-result-item';
+            item.onclick = () => this.selectCoin(coin.symbol, coin.name);
+
+            const icon = document.createElement('span');
+            icon.className = 'search-result-icon';
+            icon.textContent = coin.icon;
+
+            const symbol = document.createElement('span');
+            symbol.className = 'search-result-symbol';
+            symbol.textContent = coin.symbol;
+
+            const name = document.createElement('span');
+            name.className = 'search-result-name';
+            name.textContent = coin.name;  // Safe: textContent escapes HTML
+
+            item.appendChild(icon);
+            item.appendChild(symbol);
+            item.appendChild(name);
+            resultsContainer.appendChild(item);
+        });
+
         resultsContainer.style.display = 'block';
     },
     
