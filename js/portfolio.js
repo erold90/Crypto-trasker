@@ -268,8 +268,8 @@ const Portfolio = {
     },
     
     // Get portfolio history (for chart)
-    // Combines real snapshots (when available) with estimated values (from price history)
-    // Uses hourly data for 1D/1W views
+    // Calcola il valore del portfolio in modo INCREMENTALE basandosi sulle transazioni
+    // Mostra il valore reale che avevi a ogni data, non il valore attuale proiettato indietro
     getPortfolioHistory() {
         if (!state.portfolio.length) return [];
 
@@ -286,54 +286,68 @@ const Portfolio = {
         const limit = state.timeRange === 0 ? baseHistory.length : Math.min(state.timeRange, baseHistory.length);
         const startIdx = baseHistory.length - limit;
 
-        // Load real snapshots and create date-keyed map
-        const snapshots = loadPortfolioSnapshots();
-        const snapshotMap = {};
-        snapshots.forEach(s => {
-            snapshotMap[s.date] = s.value;
+        // Prepara le transazioni ordinate per data
+        const sortedTx = [...state.transactions]
+            .filter(tx => tx.type === 'BUY')
+            .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        // Crea una mappa di prezzi storici per ogni asset e data
+        const priceMap = {};
+        state.portfolio.forEach(asset => {
+            priceMap[asset.symbol] = {};
+            const assetHistory = state.history[asset.symbol];
+            if (assetHistory) {
+                assetHistory.forEach(h => {
+                    const dateStr = new Date(h.time * 1000).toISOString().split('T')[0];
+                    priceMap[asset.symbol][dateStr] = h.close;
+                });
+            }
         });
 
-        console.log(`📊 Chart: ${snapshots.length} snapshots loaded, timeRange=${state.timeRange}`);
+        const rate = state.currency === 'EUR' ? this.getConversionRate() : 1;
+
+        console.log(`📊 Chart: Calculating incremental portfolio history, ${sortedTx.length} transactions`);
 
         const history = [];
-        let snapshotHits = 0;
-        let estimatedDays = 0;
 
         for (let i = startIdx; i < baseHistory.length; i++) {
             const timestamp = baseHistory[i].time * 1000;
             const dateStr = new Date(timestamp).toISOString().split('T')[0];
 
-            let dayValue = 0;
+            // Calcola quali asset e quantità avevi a questa data
+            const holdings = {};
+            let invested = 0;
 
-            // Check if we have a real snapshot for this date
-            if (snapshotMap[dateStr] !== undefined) {
-                // Use real snapshot value
-                dayValue = snapshotMap[dateStr];
-                snapshotHits++;
-            } else {
-                // Estimate from price history (legacy method)
-                state.portfolio.forEach(asset => {
-                    const assetHistory = state.history[asset.symbol];
-                    if (assetHistory && assetHistory[i]) {
-                        const qty = parseFloat(asset.qty) || 0;
-                        dayValue += assetHistory[i].close * qty;
-                    }
-                });
+            for (const tx of sortedTx) {
+                // Considera solo transazioni fino a questa data
+                if (tx.date > dateStr) break;
 
-                // Convert if EUR
-                if (state.currency === 'EUR') {
-                    dayValue *= this.getConversionRate();
-                }
-                estimatedDays++;
+                const symbol = tx.asset;
+                const qty = parseFloat(tx.qty) || 0;
+                const price = parseFloat(tx.price) || 0;
+
+                holdings[symbol] = (holdings[symbol] || 0) + qty;
+                invested += qty * price;  // Costo in USD
             }
+
+            // Calcola il valore del portfolio a questa data
+            let dayValue = 0;
+            for (const [symbol, qty] of Object.entries(holdings)) {
+                const assetHistory = state.history[symbol];
+                if (assetHistory && assetHistory[i]) {
+                    dayValue += assetHistory[i].close * qty;
+                }
+            }
+
+            // Converti se EUR
+            dayValue *= rate;
 
             history.push({
                 time: timestamp,
-                value: dayValue
+                value: dayValue,
+                invested: invested * rate  // Salva anche l'investito per questa data
             });
         }
-
-        console.log(`   Snapshot hits: ${snapshotHits}, Estimated days: ${estimatedDays}`);
 
         return history;
     },

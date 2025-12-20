@@ -66,17 +66,20 @@ const Charts = {
         const labels = history.map(h => h.time);
         const values = history.map(h => h.value);
 
+        // Extract invested line from history (dynamic, grows with each purchase)
+        const investedValues = history.map(h => h.invested || 0);
+        const currentInvested = investedValues[investedValues.length - 1] || Portfolio.getTotalInvested();
+
         // Calculate stats for display
-        const invested = Portfolio.getTotalInvested();
         const currentValue = values[values.length - 1] || 0;
         const startValue = values[0] || 0;
         const maxValue = Math.max(...values);
-        const minValue = Math.min(...values);
+        const minValue = Math.min(...values.filter(v => v > 0));  // Ignora zeri
         const periodPnl = currentValue - startValue;
         const periodPnlPct = startValue > 0 ? ((currentValue - startValue) / startValue) * 100 : 0;
 
         // Update chart stats bar
-        this.updateChartStats(maxValue, minValue, invested, periodPnl, periodPnlPct);
+        this.updateChartStats(maxValue, minValue, currentInvested, periodPnl, periodPnlPct);
 
         // Get transaction markers
         const transactions = Portfolio.getTransactionMarkers();
@@ -102,11 +105,8 @@ const Charts = {
             }
         });
 
-        // Calculate invested line
-        const investedLine = values.map(() => invested);
-
         // Create dynamic gradient based on profit/loss relative to invested
-        const profitGradient = this.createProfitLossGradient(ctx, values, invested);
+        const profitGradient = this.createProfitLossGradient(ctx, values, currentInvested);
 
         // Prepare datasets
         const datasets = [
@@ -127,13 +127,13 @@ const Charts = {
             },
             {
                 label: 'Capitale Investito',
-                data: investedLine,
+                data: investedValues,  // Linea dinamica che cresce con ogni acquisto
                 borderColor: '#F59E0B',  // Arancione più visibile
                 borderDash: [10, 5],
                 borderWidth: 2,
                 fill: false,
                 pointRadius: 0,
-                tension: 0,
+                tension: 0.1,  // Leggera curva per transizioni più smooth
                 order: 3
             }
         ];
