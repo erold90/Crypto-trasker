@@ -65,9 +65,11 @@ const Charts = {
             for (const tx of sortedTx) {
                 if (tx.date > dateStr) break;
 
-                const investedUSD = (parseFloat(tx.qty) || 0) * (parseFloat(tx.price) || 0);
+                // Usa priceEUR (i prezzi sono memorizzati in EUR)
+                const priceEUR = parseFloat(tx.priceEUR) || parseFloat(tx.price) || 0;
+                const investedEUR = (parseFloat(tx.qty) || 0) * priceEUR;
                 const btcPriceAtTx = btcPriceMap[tx.date] || btcPriceToday;
-                const btcBought = investedUSD / btcPriceAtTx;
+                const btcBought = investedEUR / btcPriceAtTx;
 
                 totalBtcAccumulated += btcBought;
             }

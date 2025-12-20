@@ -486,7 +486,8 @@ const Portfolio = {
 
                 const symbol = tx.asset;
                 const qty = parseFloat(tx.qty) || 0;
-                const price = parseFloat(tx.price) || 0;
+                // Usa priceEUR (i prezzi sono memorizzati in EUR)
+                const price = parseFloat(tx.priceEUR) || parseFloat(tx.price) || 0;
 
                 holdings[symbol] = (holdings[symbol] || 0) + qty;
                 invested += qty * price;
@@ -554,6 +555,9 @@ const Portfolio = {
 
         console.log(`📊 Hourly Chart: ${limit} hours, timeRange=${state.timeRange}`);
 
+        // Calcola il totale investito (usa priceEUR)
+        const totalInvested = this.getTotalInvested();
+
         const history = [];
 
         for (let i = startIdx; i < baseHistory.length; i++) {
@@ -576,7 +580,8 @@ const Portfolio = {
 
             history.push({
                 time: timestamp,
-                value: hourValue
+                value: hourValue,
+                invested: totalInvested  // Linea costante per timeframe brevi
             });
         }
 
