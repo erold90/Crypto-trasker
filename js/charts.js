@@ -21,34 +21,68 @@ const Charts = {
         }
     },
     
-    // Get BTC comparison data (normalized to portfolio start value)
+    // Get BTC comparison data - INCREMENTAL
+    // Calcola quanto BTC avresti potuto comprare con ogni transazione
+    // e mostra il valore cumulativo nel tempo
     getBtcComparisonData(portfolioHistory) {
         if (!portfolioHistory.length) return null;
-        
+
         const btcHistory = state.history['BTC'];
         if (!btcHistory || !btcHistory.length) return null;
-        
-        // Get the starting portfolio value
-        const startValue = portfolioHistory[0].value;
-        
-        // Find the BTC starting index that matches portfolio start
-        const portfolioStartTime = portfolioHistory[0].time;
-        
-        // Calculate what the portfolio would be worth if invested 100% in BTC
+
+        // Prepara le transazioni BUY ordinate per data
+        const sortedTx = [...state.transactions]
+            .filter(tx => tx.type === 'BUY')
+            .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        if (sortedTx.length === 0) return null;
+
+        // Crea mappa prezzi BTC per data
+        const btcPriceMap = {};
+        btcHistory.forEach(h => {
+            const dateStr = new Date(h.time * 1000).toISOString().split('T')[0];
+            btcPriceMap[dateStr] = h.close;
+        });
+
         const limit = state.timeRange === 0 ? btcHistory.length : Math.min(state.timeRange, btcHistory.length);
         const startIdx = btcHistory.length - limit;
-        
-        const btcStartPrice = btcHistory[startIdx]?.close || 1;
         const conversionRate = state.currency === 'EUR' ? Portfolio.getConversionRate() : 1;
-        
-        // Calculate normalized BTC values
+
+        console.log(`📊 BTC Comparison: Calculating incremental BTC comparison, ${sortedTx.length} transactions`);
+
+        // Calcola i BTC cumulativi a ogni punto nel tempo
         const btcData = [];
+
         for (let i = startIdx; i < btcHistory.length; i++) {
-            const btcPrice = btcHistory[i].close * conversionRate;
-            const normalizedValue = (btcPrice / (btcStartPrice * conversionRate)) * startValue;
-            btcData.push(normalizedValue);
+            const timestamp = btcHistory[i].time * 1000;
+            const dateStr = new Date(timestamp).toISOString().split('T')[0];
+            const btcPriceToday = btcHistory[i].close;
+
+            // Calcola quanti BTC avresti accumulato fino a questa data
+            let totalBtcAccumulated = 0;
+
+            for (const tx of sortedTx) {
+                // Considera solo transazioni fino a questa data
+                if (tx.date > dateStr) break;
+
+                // Quanto hai investito in questa transazione (in USD)
+                const investedUSD = (parseFloat(tx.qty) || 0) * (parseFloat(tx.price) || 0);
+
+                // Prezzo BTC alla data della transazione
+                const btcPriceAtTx = btcPriceMap[tx.date] || btcPriceToday;
+
+                // Quanti BTC avresti potuto comprare
+                const btcBought = investedUSD / btcPriceAtTx;
+
+                totalBtcAccumulated += btcBought;
+            }
+
+            // Valore dei BTC accumulati a oggi
+            const btcValue = totalBtcAccumulated * btcPriceToday * conversionRate;
+
+            btcData.push(btcValue);
         }
-        
+
         return btcData;
     },
     
@@ -128,7 +162,7 @@ const Charts = {
             {
                 label: 'Capitale Investito',
                 data: investedValues,  // Linea dinamica che cresce con ogni acquisto
-                borderColor: '#F59E0B',  // Arancione più visibile
+                borderColor: '#10B981',  // Verde (diverso da BTC arancione)
                 borderDash: [10, 5],
                 borderWidth: 2,
                 fill: false,
@@ -379,32 +413,42 @@ const Charts = {
     },
     
     // Update comparison statistics
+    // Confronta performance portfolio vs BTC rispetto al capitale investito
     updateComparisonStats(portfolioHistory) {
         const statsContainer = document.getElementById('btcCompareStats');
         if (!statsContainer) return;
-        
+
         if (!this.showBtcComparison || !portfolioHistory.length) {
             statsContainer.style.display = 'none';
             return;
         }
-        
+
         const btcData = this.getBtcComparisonData(portfolioHistory);
         if (!btcData || !btcData.length) {
             statsContainer.style.display = 'none';
             return;
         }
-        
+
         const currentPortfolio = portfolioHistory[portfolioHistory.length - 1].value;
         const currentBtc = btcData[btcData.length - 1];
-        const startValue = portfolioHistory[0].value;
-        
-        const portfolioGain = ((currentPortfolio / startValue) - 1) * 100;
-        const btcGain = ((currentBtc / startValue) - 1) * 100;
+
+        // Usa il totale investito (ultima posizione della history)
+        const totalInvested = portfolioHistory[portfolioHistory.length - 1].invested || Portfolio.getTotalInvested();
+
+        // Evita divisione per zero
+        if (totalInvested <= 0) {
+            statsContainer.style.display = 'none';
+            return;
+        }
+
+        // Calcola gain % rispetto al capitale investito
+        const portfolioGain = ((currentPortfolio / totalInvested) - 1) * 100;
+        const btcGain = ((currentBtc / totalInvested) - 1) * 100;
         const difference = portfolioGain - btcGain;
         const winning = difference >= 0;
-        
+
         const sym = state.currency === 'EUR' ? '€' : '$';
-        
+
         statsContainer.style.display = 'flex';
         statsContainer.innerHTML = `
             <div class="compare-stat">
