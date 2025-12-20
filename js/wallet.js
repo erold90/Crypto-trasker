@@ -634,12 +634,44 @@ const Wallet = {
     },
 
     // Fetch historical price for a specific date
+    // Prima cerca nella cache state.history, poi fallback su API
     async fetchHistoricalPrice(symbol, timestamp) {
         try {
-            // Build URL based on proxy mode
+            const targetDate = new Date(timestamp);
+            const targetDay = Math.floor(timestamp / 1000 / 86400); // Days since epoch
+
+            // 1. Prima prova a usare state.history (già caricato da localStorage/API)
+            const history = state.history?.[symbol];
+            if (history && history.length > 0) {
+                // Cerca il giorno più vicino nella history
+                let closestPoint = null;
+                let minDiff = Infinity;
+
+                for (const point of history) {
+                    const pointDay = Math.floor(point.time / 86400);
+                    const diff = Math.abs(pointDay - targetDay);
+                    if (diff < minDiff) {
+                        minDiff = diff;
+                        closestPoint = point;
+                    }
+                }
+
+                // Se troviamo un punto entro 2 giorni, usa quello
+                if (closestPoint && minDiff <= 2) {
+                    const priceUSD = closestPoint.close;
+                    // Stima EUR (approssimazione, EUR/USD ~0.92)
+                    const priceEUR = priceUSD * 0.92;
+                    console.log(`${symbol}: Prezzo storico da cache per ${targetDate.toISOString().split('T')[0]}: $${priceUSD.toFixed(4)}`);
+                    return {
+                        EUR: priceEUR,
+                        USD: priceUSD
+                    };
+                }
+            }
+
+            // 2. Fallback: chiamata API (solo se non trovato in cache)
             let url;
             if (CONFIG.USE_PROXY) {
-                // Use proxy endpoint
                 const proxyUrl = new URL(CONFIG.APIS.PROXY.CRYPTO, window.location.origin);
                 proxyUrl.searchParams.set('endpoint', 'pricehistorical');
                 proxyUrl.searchParams.set('fsym', symbol);
@@ -647,7 +679,6 @@ const Wallet = {
                 proxyUrl.searchParams.set('ts', Math.floor(timestamp / 1000).toString());
                 url = proxyUrl.toString();
             } else {
-                // Direct call (for GitHub Pages fallback)
                 url = `https://min-api.cryptocompare.com/data/pricehistorical?fsym=${symbol}&tsyms=EUR,USD&ts=${Math.floor(timestamp / 1000)}&api_key=${CONFIG.API_KEY || ''}`;
             }
 
@@ -667,8 +698,7 @@ const Wallet = {
                 };
             }
 
-            // Se il prezzo è 0, potrebbe essere un problema dell'API
-            console.warn(`${symbol}: Prezzo storico non disponibile per ${new Date(timestamp).toISOString().split('T')[0]}`);
+            console.warn(`${symbol}: Prezzo storico non disponibile per ${targetDate.toISOString().split('T')[0]}`);
             return null;
         } catch (e) {
             console.error(`Error fetching historical price for ${symbol}:`, e);
