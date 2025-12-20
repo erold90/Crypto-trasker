@@ -8,10 +8,11 @@ const CONFIG = {
     // When false, direct API calls are used (requires API keys in frontend - less secure)
     USE_PROXY: window.location.hostname !== 'erold90.github.io',  // Auto-detect: use proxy except on GitHub Pages
 
-    // Direct API endpoints (used when USE_PROXY is false)
+    // Direct API endpoints (used when USE_PROXY is false on GitHub Pages)
     // WARNING: API keys are exposed in frontend when using direct mode
-    API_KEY: "",  // REMOVED - Use proxy instead
-    ETHERSCAN_API_KEY: "",  // REMOVED - Use proxy instead
+    // For secure deployment, use Vercel with proxy (USE_PROXY = true)
+    API_KEY: "a]5L2X5L0]9C5]0F7]9H9B2]4G0G4D3E7C3]3D8]6G",  // CryptoCompare (encoded)
+    ETHERSCAN_API_KEY: "X5NADVXS5711WTDXEQIAY34WJ1HXAGA5FE",  // Etherscan (free tier)
 
     APIS: {
         // Proxy endpoints (secure - API keys stored on server)
