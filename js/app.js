@@ -899,22 +899,44 @@ const UI = {
             }
         }
 
-        // Save updated transactions to state (price in USD come nel resto del codice)
-        state.transactions = this.pendingImportTransactions.map((tx, idx) => ({
-            id: idx + 1,
-            date: tx.date,
-            type: tx.type,
-            asset: tx.asset,
-            qty: tx.qty,
-            price: tx.priceUSD || 0,  // USD per coerenza con CONFIG.TRANSACTIONS
-            note: `Import da blockchain - ${tx.hash?.substring(0, 10) || 'N/A'}...`
-        }));
+        // MERGE imported transactions con quelle esistenti (non sovrascrivere!)
+        // Mantieni le transazioni da CONFIG.TRANSACTIONS + aggiungi nuove dalla blockchain
+        const existingTxDates = new Set(state.transactions.map(tx => `${tx.date}-${tx.asset}-${tx.qty.toFixed(2)}`));
+        let addedCount = 0;
+
+        this.pendingImportTransactions.forEach(tx => {
+            const txKey = `${tx.date}-${tx.asset}-${tx.qty.toFixed(2)}`;
+
+            // Salta se già presente (evita duplicati)
+            if (existingTxDates.has(txKey)) {
+                console.log(`Skip duplicato: ${tx.asset} ${tx.date}`);
+                return;
+            }
+
+            // Aggiungi nuova transazione
+            state.transactions.push({
+                id: Date.now() + addedCount,
+                date: tx.date,
+                type: tx.type,
+                asset: tx.asset,
+                qty: tx.qty,
+                price: tx.priceUSD || 0,
+                note: `Import blockchain - ${tx.hash?.substring(0, 10) || 'N/A'}...`
+            });
+            existingTxDates.add(txKey);
+            addedCount++;
+        });
+
+        // Ordina per data
+        state.transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        console.log(`Merge completato: ${addedCount} nuove transazioni aggiunte, ${state.transactions.length} totali`);
 
         savePortfolio();
         saveTransactions();
 
-        // Generate historical snapshots from transactions
-        console.log('Generating historical snapshots from imported transactions...');
+        // Rigenera snapshots con tutte le transazioni
+        console.log('Generating historical snapshots from merged transactions...');
         generateAndSaveHistoricalSnapshots();
 
         Analysis.runAll();

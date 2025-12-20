@@ -25,10 +25,10 @@ const Wallet = {
     // API endpoints
     APIS: {
         XRP: 'https://xrplcluster.com',
-        ETHEREUM: 'https://api.etherscan.io/v2/api',  // V2 API
+        ETHEREUM_V1: 'https://api.etherscan.io/api',  // V1 API (free tier)
+        ETHEREUM_V2: 'https://api.etherscan.io/v2/api',  // V2 API (proxy)
         HBAR: 'https://mainnet-public.mirrornode.hedera.com',
-        XDC: 'https://xdc.blocksscan.io/api',
-        XDC_RPC: 'https://rpc.xinfin.network'  // RPC alternativo per balance
+        XDC_RPC: 'https://rpc.xinfin.network'  // Solo RPC (BlocksScan ha CORS issues)
     },
 
     // QNT token contract address on Ethereum
@@ -147,11 +147,11 @@ const Wallet = {
             // Build URL based on proxy mode
             let url;
             if (CONFIG.USE_PROXY) {
-                // Use proxy endpoint
+                // Use proxy endpoint (V2 API)
                 url = `${window.location.origin}${CONFIG.APIS.PROXY.ETHERSCAN}?module=account&action=tokenbalance&contractaddress=${this.QNT_CONTRACT}&address=${address}&tag=latest`;
             } else {
-                // Direct call (requires API key in config - for GitHub Pages fallback)
-                url = `${this.APIS.ETHEREUM}?chainid=1&module=account&action=tokenbalance&contractaddress=${this.QNT_CONTRACT}&address=${address}&tag=latest&apikey=${CONFIG.ETHERSCAN_API_KEY || ''}`;
+                // Direct call using V1 API (free tier compatible)
+                url = `${this.APIS.ETHEREUM_V1}?module=account&action=tokenbalance&contractaddress=${this.QNT_CONTRACT}&address=${address}&tag=latest&apikey=${CONFIG.ETHERSCAN_API_KEY || ''}`;
             }
 
             const response = await this.fetchWithTimeout(url);
@@ -195,6 +195,7 @@ const Wallet = {
     },
 
     // Fetch XDC balance (native + psXDC staking)
+    // Usa solo RPC (BlocksScan ha problemi CORS su GitHub Pages)
     async fetchXDCBalance(address) {
         if (!address) return null;
 
@@ -205,53 +206,30 @@ const Wallet = {
                 : address;
 
             let totalBalance = 0;
-            let useRpcFallback = false;
 
-            // 1. Try BlocksScan API first
+            // 1. Fetch native XDC balance via RPC
             try {
-                const nativeUrl = `${this.APIS.XDC}?module=account&action=balance&address=${normalizedAddress}`;
-                const nativeResponse = await this.fetchWithTimeout(nativeUrl, {}, 5000);
-
-                if (nativeResponse.ok) {
-                    const nativeData = await nativeResponse.json();
-                    if (nativeData.status === '1' && nativeData.result) {
-                        const nativeBalance = parseInt(nativeData.result) / Math.pow(10, 18);
-                        totalBalance += nativeBalance;
-                        console.log(`XDC native balance (BlocksScan): ${nativeBalance}`);
-                    }
-                } else {
-                    useRpcFallback = true;
+                const rpcResponse = await this.fetchWithTimeout(this.APIS.XDC_RPC, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        jsonrpc: '2.0',
+                        method: 'eth_getBalance',
+                        params: [normalizedAddress, 'latest'],
+                        id: 1
+                    })
+                });
+                const rpcData = await rpcResponse.json();
+                if (rpcData.result) {
+                    const nativeBalance = parseInt(rpcData.result, 16) / Math.pow(10, 18);
+                    totalBalance += nativeBalance;
+                    console.log(`XDC native balance: ${nativeBalance.toFixed(2)}`);
                 }
             } catch (e) {
-                console.warn('BlocksScan API failed, using RPC fallback:', e.message);
-                useRpcFallback = true;
+                console.error('XDC native balance fetch failed:', e.message);
             }
 
-            // 1b. Fallback to RPC if BlocksScan fails
-            if (useRpcFallback) {
-                try {
-                    const rpcResponse = await this.fetchWithTimeout(this.APIS.XDC_RPC, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            jsonrpc: '2.0',
-                            method: 'eth_getBalance',
-                            params: [normalizedAddress, 'latest'],
-                            id: 1
-                        })
-                    });
-                    const rpcData = await rpcResponse.json();
-                    if (rpcData.result) {
-                        const nativeBalance = parseInt(rpcData.result, 16) / Math.pow(10, 18);
-                        totalBalance += nativeBalance;
-                        console.log(`XDC native balance (RPC): ${nativeBalance}`);
-                    }
-                } catch (e) {
-                    console.error('XDC RPC fallback failed:', e.message);
-                }
-            }
-
-            // 2. Fetch psXDC (staked) token balance via RPC (più affidabile)
+            // 2. Fetch psXDC (staked) token balance via RPC
             try {
                 // balanceOf(address) selector = 0x70a08231
                 const paddedAddress = normalizedAddress.replace('0x', '').toLowerCase().padStart(64, '0');
@@ -277,14 +255,14 @@ const Wallet = {
                     const stakedBalance = parseInt(rpcData.result, 16) / Math.pow(10, 18);
                     if (stakedBalance > 0) {
                         totalBalance += stakedBalance;
-                        console.log(`XDC staked (psXDC) balance via RPC: ${stakedBalance.toFixed(2)}`);
+                        console.log(`XDC staked (psXDC): ${stakedBalance.toFixed(2)}`);
                     }
                 }
             } catch (e) {
                 console.warn('psXDC balance fetch failed:', e.message);
             }
 
-            console.log(`XDC total balance: ${totalBalance}`);
+            console.log(`XDC total: ${totalBalance.toFixed(2)}`);
             return totalBalance > 0 ? totalBalance : null;
         } catch (e) {
             console.error('Error fetching XDC balance:', e.message);
@@ -568,11 +546,11 @@ const Wallet = {
             // Build URL based on proxy mode
             let url;
             if (CONFIG.USE_PROXY) {
-                // Use proxy endpoint
+                // Use proxy endpoint (V2 API)
                 url = `${window.location.origin}${CONFIG.APIS.PROXY.ETHERSCAN}?module=account&action=tokentx&contractaddress=${this.QNT_CONTRACT}&address=${address}&sort=asc`;
             } else {
-                // Direct call (for GitHub Pages fallback)
-                url = `${this.APIS.ETHEREUM}?chainid=1&module=account&action=tokentx&contractaddress=${this.QNT_CONTRACT}&address=${address}&sort=asc&apikey=${CONFIG.ETHERSCAN_API_KEY || ''}`;
+                // Direct call using V1 API (free tier compatible)
+                url = `${this.APIS.ETHEREUM_V1}?module=account&action=tokentx&contractaddress=${this.QNT_CONTRACT}&address=${address}&sort=asc&apikey=${CONFIG.ETHERSCAN_API_KEY || ''}`;
             }
             const response = await fetch(url);
             const data = await response.json();
@@ -664,60 +642,16 @@ const Wallet = {
         }
     },
 
-    // Fetch XDC transaction history (native + psXDC)
+    // Fetch XDC transaction history
+    // NOTA: Non disponibile su GitHub Pages (BlocksScan ha problemi CORS)
+    // Le transazioni XDC devono essere inserite manualmente in CONFIG.TRANSACTIONS
     async fetchXDCTransactions(address) {
         if (!address) return [];
 
-        try {
-            const normalizedAddress = address.toLowerCase().startsWith('xdc')
-                ? '0x' + address.slice(3)
-                : address;
-
-            const transactions = [];
-
-            // 1. Native XDC transactions via BlocksScan API
-            try {
-                const nativeUrl = `${this.APIS.XDC}?module=account&action=txlist&address=${normalizedAddress}&sort=asc`;
-                const nativeResponse = await fetch(nativeUrl, { timeout: 10000 });
-
-                if (!nativeResponse.ok) {
-                    console.warn('XDC BlocksScan API non disponibile per transazioni (status:', nativeResponse.status, ')');
-                    return transactions;
-                }
-
-                const nativeData = await nativeResponse.json();
-
-                if (nativeData.status === '1' && nativeData.result && Array.isArray(nativeData.result)) {
-                    for (const tx of nativeData.result) {
-                        if (tx.to && tx.to.toLowerCase() === normalizedAddress.toLowerCase() && tx.value !== '0') {
-                            const amount = parseInt(tx.value) / Math.pow(10, 18);
-                            const date = new Date(parseInt(tx.timeStamp) * 1000);
-
-                            // Skip very small amounts (likely fees/dust)
-                            if (amount > 1) {
-                                transactions.push({
-                                    type: 'BUY',
-                                    asset: 'XDC',
-                                    qty: amount,
-                                    date: date.toISOString().split('T')[0],
-                                    timestamp: date.getTime(),
-                                    hash: tx.hash,
-                                    from: tx.from
-                                });
-                            }
-                        }
-                    }
-                }
-            } catch (e) {
-                console.warn('XDC transactions API error:', e.message);
-            }
-
-            console.log(`XDC: Trovate ${transactions.length} transazioni`);
-            return transactions;
-        } catch (e) {
-            console.error('Error fetching XDC transactions:', e);
-            return [];
-        }
+        // XDC transaction history non disponibile via RPC
+        // BlocksScan API ha problemi CORS da GitHub Pages
+        console.log('XDC: Transaction history non disponibile (usa CONFIG.TRANSACTIONS)');
+        return [];
     },
 
     // Fetch historical price for a specific date
