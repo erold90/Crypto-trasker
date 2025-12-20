@@ -215,22 +215,37 @@ const Wallet = {
                 }
             }
 
-            // 2. Try to fetch psXDC (staked) token balance
+            // 2. Fetch psXDC (staked) token balance via RPC (più affidabile)
             try {
-                const tokenUrl = `${this.APIS.XDC}?module=account&action=tokenbalance&contractaddress=${this.PSXDC_CONTRACT}&address=${normalizedAddress}`;
-                const tokenResponse = await fetch(tokenUrl, { timeout: 5000 });
+                // balanceOf(address) selector = 0x70a08231
+                const paddedAddress = normalizedAddress.replace('0x', '').toLowerCase().padStart(64, '0');
+                const data = '0x70a08231' + paddedAddress;
 
-                if (tokenResponse.ok) {
-                    const tokenData = await tokenResponse.json();
-                    if (tokenData.status === '1' && tokenData.result) {
-                        // psXDC has 18 decimals, 1:1 ratio with XDC
-                        const stakedBalance = parseInt(tokenData.result) / Math.pow(10, 18);
+                const rpcResponse = await fetch(this.APIS.XDC_RPC, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        jsonrpc: '2.0',
+                        method: 'eth_call',
+                        params: [{
+                            to: this.PSXDC_CONTRACT,
+                            data: data
+                        }, 'latest'],
+                        id: 1
+                    })
+                });
+
+                const rpcData = await rpcResponse.json();
+                if (rpcData.result && rpcData.result !== '0x') {
+                    // psXDC has 18 decimals, 1:1 ratio with XDC
+                    const stakedBalance = parseInt(rpcData.result, 16) / Math.pow(10, 18);
+                    if (stakedBalance > 0) {
                         totalBalance += stakedBalance;
-                        console.log(`XDC staked (psXDC) balance: ${stakedBalance}`);
+                        console.log(`XDC staked (psXDC) balance via RPC: ${stakedBalance.toFixed(2)}`);
                     }
                 }
             } catch (e) {
-                console.warn('psXDC balance fetch failed (API may be down)');
+                console.warn('psXDC balance fetch failed:', e.message);
             }
 
             console.log(`XDC total balance: ${totalBalance}`);
