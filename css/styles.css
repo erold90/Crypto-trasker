@@ -2103,6 +2103,132 @@ tr:hover {
 }
 
 /* ============================================
+   CHART STATS BAR & LEGEND
+   ============================================ */
+
+.chart-stats-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: var(--bg-elevated);
+    border-radius: var(--radius-md);
+    margin-bottom: 16px;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.chart-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    min-width: 80px;
+}
+
+.chart-stat-label {
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.chart-stat-value {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.chart-stat-value.positive {
+    color: var(--accent-green);
+}
+
+.chart-stat-value.negative {
+    color: var(--accent-red);
+}
+
+.chart-stat.pnl-badge {
+    background: linear-gradient(135deg, rgba(0, 212, 170, 0.15), rgba(0, 212, 170, 0.05));
+    border: 1px solid rgba(0, 212, 170, 0.3);
+    border-radius: var(--radius-sm);
+    padding: 8px 16px;
+}
+
+.chart-stat.pnl-badge.negative {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(239, 68, 68, 0.05));
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+/* Chart Legend */
+.chart-legend {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    padding: 12px;
+    margin-top: 12px;
+    background: var(--bg-elevated);
+    border-radius: var(--radius-sm);
+    flex-wrap: wrap;
+}
+
+.legend-title {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Invested Line Label */
+.invested-line-label {
+    position: absolute;
+    right: 10px;
+    background: rgba(245, 158, 11, 0.9);
+    color: #000;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    font-family: var(--font-mono);
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+    .chart-stats-bar {
+        justify-content: center;
+        gap: 12px;
+    }
+
+    .chart-stat {
+        min-width: 70px;
+    }
+
+    .chart-legend {
+        gap: 12px;
+    }
+
+    .legend-title {
+        width: 100%;
+        text-align: center;
+    }
+}
+
+/* ============================================
    DASHBOARD FOOTER
    ============================================ */
 

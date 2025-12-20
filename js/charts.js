@@ -56,29 +56,41 @@ const Charts = {
     renderMain() {
         const canvas = document.getElementById('mainChart');
         if (!canvas) return;
-        
+
         const ctx = canvas.getContext('2d');
         const history = Portfolio.getPortfolioHistory();
-        
+
         if (!history.length) return;
-        
+
         // Prepare data
         const labels = history.map(h => h.time);
         const values = history.map(h => h.value);
-        
+
+        // Calculate stats for display
+        const invested = Portfolio.getTotalInvested();
+        const currentValue = values[values.length - 1] || 0;
+        const startValue = values[0] || 0;
+        const maxValue = Math.max(...values);
+        const minValue = Math.min(...values);
+        const periodPnl = currentValue - startValue;
+        const periodPnlPct = startValue > 0 ? ((currentValue - startValue) / startValue) * 100 : 0;
+
+        // Update chart stats bar
+        this.updateChartStats(maxValue, minValue, invested, periodPnl, periodPnlPct);
+
         // Get transaction markers
         const transactions = Portfolio.getTransactionMarkers();
         const txDates = new Set(transactions.map(t => t.date));
-        
+
         // Point styling for transaction markers
         const pointColors = [];
         const pointRadii = [];
         const pointBorders = [];
-        
+
         history.forEach(h => {
             const dateStr = new Date(h.time).toISOString().split('T')[0];
             const txOnDay = transactions.filter(t => t.date === dateStr);
-            
+
             if (txOnDay.length > 0) {
                 pointColors.push(txOnDay[0].color);
                 pointRadii.push(8);
@@ -89,18 +101,20 @@ const Charts = {
                 pointBorders.push('transparent');
             }
         });
-        
+
         // Calculate invested line
-        const invested = Portfolio.getTotalInvested();
         const investedLine = values.map(() => invested);
-        
+
+        // Create dynamic gradient based on profit/loss relative to invested
+        const profitGradient = this.createProfitLossGradient(ctx, values, invested);
+
         // Prepare datasets
         const datasets = [
             {
                 label: 'Valore Portfolio',
                 data: values,
                 borderColor: '#0088FF',
-                backgroundColor: this.createGradient(ctx, 'rgba(0, 136, 255, 0.3)', 'rgba(0, 136, 255, 0.0)'),
+                backgroundColor: profitGradient,
                 fill: true,
                 tension: 0.4,
                 borderWidth: 3,
@@ -114,8 +128,8 @@ const Charts = {
             {
                 label: 'Capitale Investito',
                 data: investedLine,
-                borderColor: 'rgba(255, 255, 255, 0.3)',
-                borderDash: [8, 4],
+                borderColor: '#F59E0B',  // Arancione più visibile
+                borderDash: [10, 5],
                 borderWidth: 2,
                 fill: false,
                 pointRadius: 0,
@@ -252,9 +266,12 @@ const Charts = {
                     x: {
                         type: 'time',
                         time: {
-                            unit: state.timeRange <= 30 ? 'day' : 
+                            unit: state.timeRange <= 1 ? 'hour' :
+                                  state.timeRange <= 7 ? 'day' :
+                                  state.timeRange <= 30 ? 'day' :
                                   state.timeRange <= 90 ? 'week' : 'month',
                             displayFormats: {
+                                hour: 'HH:mm',
                                 day: 'd MMM',
                                 week: 'd MMM',
                                 month: 'MMM yyyy'
@@ -268,7 +285,8 @@ const Charts = {
                             font: {
                                 family: "'JetBrains Mono', monospace",
                                 size: 11
-                            }
+                            },
+                            maxTicksLimit: state.timeRange <= 7 ? 7 : 12
                         }
                     },
                     y: {
@@ -298,6 +316,66 @@ const Charts = {
         gradient.addColorStop(0, colorStart);
         gradient.addColorStop(1, colorEnd);
         return gradient;
+    },
+
+    // Create dynamic profit/loss gradient based on invested line
+    createProfitLossGradient(ctx, values, invested) {
+        const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+        const canvas = ctx.canvas;
+        const chartArea = canvas.height;
+
+        // Determine overall position relative to invested
+        const currentValue = values[values.length - 1] || 0;
+        const avgValue = values.reduce((a, b) => a + b, 0) / values.length;
+
+        if (avgValue >= invested) {
+            // In profit - green gradient
+            gradient.addColorStop(0, 'rgba(0, 212, 170, 0.4)');
+            gradient.addColorStop(0.5, 'rgba(0, 212, 170, 0.15)');
+            gradient.addColorStop(1, 'rgba(0, 212, 170, 0.0)');
+        } else {
+            // In loss - red gradient
+            gradient.addColorStop(0, 'rgba(239, 68, 68, 0.4)');
+            gradient.addColorStop(0.5, 'rgba(239, 68, 68, 0.15)');
+            gradient.addColorStop(1, 'rgba(239, 68, 68, 0.0)');
+        }
+
+        return gradient;
+    },
+
+    // Update chart stats bar
+    updateChartStats(maxValue, minValue, invested, periodPnl, periodPnlPct) {
+        const sym = state.currency === 'EUR' ? '€' : '$';
+
+        // ATH
+        const athEl = document.getElementById('chartATH');
+        if (athEl) {
+            athEl.textContent = `${sym}${maxValue.toLocaleString('it-IT', { maximumFractionDigits: 0 })}`;
+        }
+
+        // Min
+        const minEl = document.getElementById('chartMin');
+        if (minEl) {
+            minEl.textContent = `${sym}${minValue.toLocaleString('it-IT', { maximumFractionDigits: 0 })}`;
+        }
+
+        // Invested
+        const investedEl = document.getElementById('chartInvested');
+        if (investedEl) {
+            investedEl.textContent = `${sym}${invested.toLocaleString('it-IT', { maximumFractionDigits: 0 })}`;
+        }
+
+        // P&L
+        const pnlEl = document.getElementById('chartPnl');
+        const pnlBadge = document.getElementById('chartPnlBadge');
+        if (pnlEl) {
+            const sign = periodPnl >= 0 ? '+' : '';
+            pnlEl.textContent = `${sign}${sym}${periodPnl.toLocaleString('it-IT', { maximumFractionDigits: 0 })} (${sign}${periodPnlPct.toFixed(1)}%)`;
+            pnlEl.className = `chart-stat-value ${periodPnl >= 0 ? 'positive' : 'negative'}`;
+        }
+        if (pnlBadge) {
+            pnlBadge.className = `chart-stat pnl-badge ${periodPnl >= 0 ? '' : 'negative'}`;
+        }
     },
     
     // Update comparison statistics
