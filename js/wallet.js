@@ -243,8 +243,16 @@ const Wallet = {
             try {
                 const balance = await this.fetchBalance(asset.symbol);
 
-                if (balance !== null && !isNaN(balance)) {
-                    const oldQty = asset.qty;
+                if (balance !== null && !isNaN(balance) && balance >= 0) {
+                    const oldQty = parseFloat(asset.qty) || 0;
+
+                    // Protezione: non sovrascrivere con 0 se avevamo un saldo valido
+                    if (balance === 0 && oldQty > 0) {
+                        console.warn(`${asset.symbol}: API ha restituito 0, ma avevamo ${oldQty}. Skipping.`);
+                        results.failed.push(asset.symbol);
+                        continue;
+                    }
+
                     asset.qty = balance;
 
                     if (Math.abs(oldQty - balance) > 0.0001) {
@@ -288,8 +296,21 @@ const Wallet = {
         try {
             const balance = await this.fetchBalance(symbol);
 
-            if (balance !== null && !isNaN(balance)) {
-                const oldQty = asset.qty;
+            if (balance !== null && !isNaN(balance) && balance >= 0) {
+                const oldQty = parseFloat(asset.qty) || 0;
+
+                // Protezione: non sovrascrivere con 0 se avevamo un saldo valido
+                // (potrebbe essere un errore API temporaneo)
+                if (balance === 0 && oldQty > 0) {
+                    console.warn(`${symbol}: API ha restituito 0, ma avevamo ${oldQty}. Verifica manualmente.`);
+                    return {
+                        success: false,
+                        message: 'Saldo 0 sospetto - verifica manualmente',
+                        oldQty,
+                        apiBalance: balance
+                    };
+                }
+
                 asset.qty = balance;
                 savePortfolio();
 
@@ -491,8 +512,8 @@ const Wallet = {
                             const amount = transfer.amount / 100000000; // tinybars to HBAR
                             const date = new Date(parseFloat(tx.consensus_timestamp) * 1000);
 
-                            // Skip small amounts (likely fees)
-                            if (amount > 1) {
+                            // Skip very small amounts (likely fees/dust)
+                            if (amount > 0.1) {
                                 transactions.push({
                                     type: 'BUY',
                                     asset: 'HBAR',
@@ -537,8 +558,8 @@ const Wallet = {
                         const amount = parseInt(tx.value) / Math.pow(10, 18);
                         const date = new Date(parseInt(tx.timeStamp) * 1000);
 
-                        // Skip small amounts
-                        if (amount > 100) {
+                        // Skip very small amounts (likely fees/dust)
+                        if (amount > 1) {
                             transactions.push({
                                 type: 'BUY',
                                 asset: 'XDC',
@@ -566,14 +587,23 @@ const Wallet = {
             // CryptoCompare API for historical price
             const url = `https://min-api.cryptocompare.com/data/pricehistorical?fsym=${symbol}&tsyms=EUR,USD&ts=${Math.floor(timestamp / 1000)}&api_key=${CONFIG.API_KEY}`;
             const response = await fetch(url);
+
+            if (!response.ok) {
+                console.warn(`HTTP error fetching price for ${symbol}: ${response.status}`);
+                return null;
+            }
+
             const data = await response.json();
 
-            if (data[symbol]) {
+            if (data[symbol] && (data[symbol].EUR > 0 || data[symbol].USD > 0)) {
                 return {
                     EUR: data[symbol].EUR || 0,
                     USD: data[symbol].USD || 0
                 };
             }
+
+            // Se il prezzo è 0, potrebbe essere un problema dell'API
+            console.warn(`${symbol}: Prezzo storico non disponibile per ${new Date(timestamp).toISOString().split('T')[0]}`);
             return null;
         } catch (e) {
             console.error(`Error fetching historical price for ${symbol}:`, e);
@@ -644,16 +674,32 @@ const Wallet = {
 
         let totalQty = 0;
         let totalValueEUR = 0;
+        let totalValueUSD = 0;
+        let validPriceCount = 0;
 
         for (const tx of assetTxs) {
             totalQty += tx.qty;
-            totalValueEUR += tx.valueEUR || 0;
+            if (tx.valueEUR && tx.valueEUR > 0) {
+                totalValueEUR += tx.valueEUR;
+                validPriceCount++;
+            }
+            if (tx.valueUSD && tx.valueUSD > 0) {
+                totalValueUSD += tx.valueUSD;
+            }
+        }
+
+        // Se non abbiamo prezzi validi, ritorna null
+        if (validPriceCount === 0 || totalQty === 0) {
+            console.warn(`${symbol}: Nessun prezzo storico valido trovato per ${assetTxs.length} transazioni`);
+            return null;
         }
 
         return {
             totalQty,
             avgPriceEUR: totalValueEUR / totalQty,
-            transactions: assetTxs.length
+            avgPriceUSD: totalValueUSD / totalQty,
+            transactions: assetTxs.length,
+            validPrices: validPriceCount
         };
     }
 };

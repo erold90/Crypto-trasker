@@ -857,25 +857,28 @@ const UI = {
 
         for (const symbol of symbols) {
             const result = Wallet.calculateAveragePrice(this.pendingImportTransactions, symbol);
-            if (result) {
+            if (result && result.avgPriceUSD > 0) {
                 // Find asset in portfolio
                 const asset = state.portfolio.find(a => a.symbol === symbol);
                 if (asset) {
-                    asset.avgPrice = result.avgPriceEUR;
-                    console.log(`${symbol}: Updated avgPrice to €${result.avgPriceEUR.toFixed(4)}`);
+                    // avgPrice deve essere in USD (come nel resto del codice)
+                    asset.avgPrice = result.avgPriceUSD;
+                    console.log(`${symbol}: Updated avgPrice to $${result.avgPriceUSD.toFixed(4)} (€${result.avgPriceEUR.toFixed(4)})`);
                 }
+            } else if (result) {
+                console.warn(`${symbol}: Prezzo storico non disponibile, avgPrice non aggiornato`);
             }
         }
 
-        // Save updated transactions to state
+        // Save updated transactions to state (price in USD come nel resto del codice)
         state.transactions = this.pendingImportTransactions.map((tx, idx) => ({
             id: idx + 1,
             date: tx.date,
             type: tx.type,
             asset: tx.asset,
             qty: tx.qty,
-            price: tx.priceEUR || 0,
-            note: `Import da blockchain - ${tx.hash?.substring(0, 10)}...`
+            price: tx.priceUSD || 0,  // USD per coerenza con CONFIG.TRANSACTIONS
+            note: `Import da blockchain - ${tx.hash?.substring(0, 10) || 'N/A'}...`
         }));
 
         savePortfolio();
