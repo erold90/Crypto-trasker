@@ -22,18 +22,44 @@ const Portfolio = {
     },
 
     // Get total invested
+    // Usa costBasis se disponibile, altrimenti calcola da transazioni o qty*avgPrice
     getTotalInvested() {
         let total = 0;
         const rate = this.getConversionRate();
 
         state.portfolio.forEach(asset => {
-            // avgPrice is in USD, convert if needed
-            const qty = parseFloat(asset.qty) || 0;
-            const avgPrice = parseFloat(asset.avgPrice) || 0;
-            const avgInCurrency = avgPrice * rate;
-            total += qty * avgInCurrency;
+            // Priorità: costBasis > calcolo da transazioni > qty*avgPrice
+            if (asset.costBasis !== undefined && asset.costBasis > 0) {
+                // Usa il costo base memorizzato (in USD)
+                total += asset.costBasis * rate;
+            } else {
+                // Fallback: calcola dalle transazioni per questo asset
+                const assetTxs = state.transactions.filter(
+                    tx => tx.asset === asset.symbol && tx.type === 'BUY'
+                );
+
+                if (assetTxs.length > 0) {
+                    // Calcola costo totale dalle transazioni
+                    let txCost = 0;
+                    assetTxs.forEach(tx => {
+                        txCost += (parseFloat(tx.qty) || 0) * (parseFloat(tx.price) || 0);
+                    });
+                    total += txCost * rate;
+                } else {
+                    // Ultimo fallback: usa avgPrice * qty originale (dal config)
+                    const originalQty = this.getOriginalQty(asset.symbol);
+                    const avgPrice = parseFloat(asset.avgPrice) || 0;
+                    total += originalQty * avgPrice * rate;
+                }
+            }
         });
         return total;
+    },
+
+    // Ottiene la quantità originale dal CONFIG (prima del sync wallet)
+    getOriginalQty(symbol) {
+        const defaultAsset = CONFIG.DEFAULT_PORTFOLIO.find(a => a.symbol === symbol);
+        return defaultAsset ? parseFloat(defaultAsset.qty) || 0 : 0;
     },
     
     // Get conversion rate (USD to current currency)

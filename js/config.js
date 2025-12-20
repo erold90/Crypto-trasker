@@ -73,11 +73,13 @@ const CONFIG = {
     ],
     
     // Default Portfolio
+    // costBasis = costo totale investito in USD (calcolato dalle transazioni)
+    // Non cambia quando la qty viene aggiornata dal wallet sync
     DEFAULT_PORTFOLIO: [
-        { symbol: 'XRP', name: 'XRP', qty: 10001.87, avgPrice: 0.5795 },
-        { symbol: 'QNT', name: 'Quant', qty: 60.04, avgPrice: 74.29 },
-        { symbol: 'HBAR', name: 'Hedera', qty: 40005.10, avgPrice: 0.1942 },
-        { symbol: 'XDC', name: 'XDC Network', qty: 100000, avgPrice: 0.07755 }
+        { symbol: 'XRP', name: 'XRP', qty: 10001.87, avgPrice: 0.5795, costBasis: 5796.08 },
+        { symbol: 'QNT', name: 'Quant', qty: 60.04, avgPrice: 74.29, costBasis: 4462.79 },
+        { symbol: 'HBAR', name: 'Hedera', qty: 40005.10, avgPrice: 0.1942, costBasis: 7773.20 },
+        { symbol: 'XDC', name: 'XDC Network', qty: 100000, avgPrice: 0.07755, costBasis: 7759.05 }
     ],
     
     // LocalStorage Keys
@@ -160,6 +162,19 @@ function sanitizePortfolio(portfolio) {
         const originalPrice = asset.avgPrice;
         asset.qty = parseFloat(asset.qty) || 0;
         asset.avgPrice = parseFloat(asset.avgPrice) || 0;
+
+        // Ensure costBasis exists (copy from defaults if missing)
+        if (asset.costBasis === undefined || asset.costBasis === null) {
+            const defaultAsset = CONFIG.DEFAULT_PORTFOLIO.find(d => d.symbol === asset.symbol);
+            if (defaultAsset && defaultAsset.costBasis) {
+                asset.costBasis = defaultAsset.costBasis;
+                needsSave = true;
+                console.log(`Added costBasis for ${asset.symbol}: $${asset.costBasis}`);
+            }
+        } else {
+            asset.costBasis = parseFloat(asset.costBasis) || 0;
+        }
+
         if (originalQty !== asset.qty || originalPrice !== asset.avgPrice) {
             needsSave = true;
             console.warn(`Fixed corrupted data for ${asset.symbol}: qty=${originalQty}->${asset.qty}, avgPrice=${originalPrice}->${asset.avgPrice}`);

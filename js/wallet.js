@@ -21,7 +21,8 @@ const Wallet = {
         XRP: 'https://xrplcluster.com',
         ETHEREUM: 'https://api.etherscan.io/v2/api',  // V2 API
         HBAR: 'https://mainnet-public.mirrornode.hedera.com',
-        XDC: 'https://xdc.blocksscan.io/api'
+        XDC: 'https://xdc.blocksscan.io/api',
+        XDC_RPC: 'https://rpc.xinfin.network'  // RPC alternativo per balance
     },
 
     // QNT token contract address on Ethereum
@@ -168,28 +169,68 @@ const Wallet = {
                 : address;
 
             let totalBalance = 0;
+            let useRpcFallback = false;
 
-            // 1. Fetch native XDC balance
-            const nativeUrl = `${this.APIS.XDC}?module=account&action=balance&address=${normalizedAddress}`;
-            const nativeResponse = await fetch(nativeUrl);
-            const nativeData = await nativeResponse.json();
+            // 1. Try BlocksScan API first
+            try {
+                const nativeUrl = `${this.APIS.XDC}?module=account&action=balance&address=${normalizedAddress}`;
+                const nativeResponse = await fetch(nativeUrl, { timeout: 5000 });
 
-            if (nativeData.status === '1' && nativeData.result) {
-                const nativeBalance = parseInt(nativeData.result) / Math.pow(10, 18);
-                totalBalance += nativeBalance;
-                console.log(`XDC native balance: ${nativeBalance}`);
+                if (nativeResponse.ok) {
+                    const nativeData = await nativeResponse.json();
+                    if (nativeData.status === '1' && nativeData.result) {
+                        const nativeBalance = parseInt(nativeData.result) / Math.pow(10, 18);
+                        totalBalance += nativeBalance;
+                        console.log(`XDC native balance (BlocksScan): ${nativeBalance}`);
+                    }
+                } else {
+                    useRpcFallback = true;
+                }
+            } catch (e) {
+                console.warn('BlocksScan API failed, using RPC fallback');
+                useRpcFallback = true;
             }
 
-            // 2. Fetch psXDC (staked) token balance
-            const tokenUrl = `${this.APIS.XDC}?module=account&action=tokenbalance&contractaddress=${this.PSXDC_CONTRACT}&address=${normalizedAddress}`;
-            const tokenResponse = await fetch(tokenUrl);
-            const tokenData = await tokenResponse.json();
+            // 1b. Fallback to RPC if BlocksScan fails
+            if (useRpcFallback) {
+                try {
+                    const rpcResponse = await fetch(this.APIS.XDC_RPC, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            jsonrpc: '2.0',
+                            method: 'eth_getBalance',
+                            params: [normalizedAddress, 'latest'],
+                            id: 1
+                        })
+                    });
+                    const rpcData = await rpcResponse.json();
+                    if (rpcData.result) {
+                        const nativeBalance = parseInt(rpcData.result, 16) / Math.pow(10, 18);
+                        totalBalance += nativeBalance;
+                        console.log(`XDC native balance (RPC): ${nativeBalance}`);
+                    }
+                } catch (e) {
+                    console.error('XDC RPC fallback failed:', e);
+                }
+            }
 
-            if (tokenData.status === '1' && tokenData.result) {
-                // psXDC has 18 decimals, 1:1 ratio with XDC
-                const stakedBalance = parseInt(tokenData.result) / Math.pow(10, 18);
-                totalBalance += stakedBalance;
-                console.log(`XDC staked (psXDC) balance: ${stakedBalance}`);
+            // 2. Try to fetch psXDC (staked) token balance
+            try {
+                const tokenUrl = `${this.APIS.XDC}?module=account&action=tokenbalance&contractaddress=${this.PSXDC_CONTRACT}&address=${normalizedAddress}`;
+                const tokenResponse = await fetch(tokenUrl, { timeout: 5000 });
+
+                if (tokenResponse.ok) {
+                    const tokenData = await tokenResponse.json();
+                    if (tokenData.status === '1' && tokenData.result) {
+                        // psXDC has 18 decimals, 1:1 ratio with XDC
+                        const stakedBalance = parseInt(tokenData.result) / Math.pow(10, 18);
+                        totalBalance += stakedBalance;
+                        console.log(`XDC staked (psXDC) balance: ${stakedBalance}`);
+                    }
+                }
+            } catch (e) {
+                console.warn('psXDC balance fetch failed (API may be down)');
             }
 
             console.log(`XDC total balance: ${totalBalance}`);
@@ -498,29 +539,40 @@ const Wallet = {
         if (!accountId) return [];
 
         try {
-            const url = `${this.APIS.HBAR}/api/v1/transactions?account.id=${accountId}&limit=100&order=asc&transactiontype=CRYPTOTRANSFER`;
+            // Rimuovi filtro transactiontype per catturare tutte le transazioni
+            const url = `${this.APIS.HBAR}/api/v1/transactions?account.id=${accountId}&limit=100&order=asc`;
             const response = await fetch(url);
             const data = await response.json();
             const transactions = [];
+            const seenHashes = new Set();  // Evita duplicati
 
             if (data.transactions) {
                 for (const tx of data.transactions) {
+                    // Skip transazioni fallite
+                    if (tx.result !== 'SUCCESS') continue;
+
                     // Find transfers to our account
                     const transfers = tx.transfers || [];
                     for (const transfer of transfers) {
                         if (transfer.account === accountId && transfer.amount > 0) {
                             const amount = transfer.amount / 100000000; // tinybars to HBAR
                             const date = new Date(parseFloat(tx.consensus_timestamp) * 1000);
+                            const txId = tx.transaction_id;
 
-                            // Skip very small amounts (likely fees/dust)
-                            if (amount > 0.1) {
+                            // Skip se già processato (deduplicazione)
+                            if (seenHashes.has(txId)) continue;
+
+                            // Skip importi molto piccoli (rewards/dust) - considera solo acquisti significativi
+                            // Un acquisto tipico è > 100 HBAR
+                            if (amount > 100) {
+                                seenHashes.add(txId);
                                 transactions.push({
                                     type: 'BUY',
                                     asset: 'HBAR',
                                     qty: amount,
                                     date: date.toISOString().split('T')[0],
                                     timestamp: date.getTime(),
-                                    hash: tx.transaction_id,
+                                    hash: txId,
                                     from: 'exchange'
                                 });
                             }
@@ -529,6 +581,7 @@ const Wallet = {
                 }
             }
 
+            console.log(`HBAR: Trovate ${transactions.length} transazioni significative`);
             return transactions;
         } catch (e) {
             console.error('Error fetching HBAR transactions:', e);
@@ -547,33 +600,44 @@ const Wallet = {
 
             const transactions = [];
 
-            // 1. Native XDC transactions
-            const nativeUrl = `${this.APIS.XDC}?module=account&action=txlist&address=${normalizedAddress}&sort=asc`;
-            const nativeResponse = await fetch(nativeUrl);
-            const nativeData = await nativeResponse.json();
+            // 1. Native XDC transactions via BlocksScan API
+            try {
+                const nativeUrl = `${this.APIS.XDC}?module=account&action=txlist&address=${normalizedAddress}&sort=asc`;
+                const nativeResponse = await fetch(nativeUrl, { timeout: 10000 });
 
-            if (nativeData.status === '1' && nativeData.result) {
-                for (const tx of nativeData.result) {
-                    if (tx.to.toLowerCase() === normalizedAddress.toLowerCase() && tx.value !== '0') {
-                        const amount = parseInt(tx.value) / Math.pow(10, 18);
-                        const date = new Date(parseInt(tx.timeStamp) * 1000);
+                if (!nativeResponse.ok) {
+                    console.warn('XDC BlocksScan API non disponibile per transazioni (status:', nativeResponse.status, ')');
+                    return transactions;
+                }
 
-                        // Skip very small amounts (likely fees/dust)
-                        if (amount > 1) {
-                            transactions.push({
-                                type: 'BUY',
-                                asset: 'XDC',
-                                qty: amount,
-                                date: date.toISOString().split('T')[0],
-                                timestamp: date.getTime(),
-                                hash: tx.hash,
-                                from: tx.from
-                            });
+                const nativeData = await nativeResponse.json();
+
+                if (nativeData.status === '1' && nativeData.result && Array.isArray(nativeData.result)) {
+                    for (const tx of nativeData.result) {
+                        if (tx.to && tx.to.toLowerCase() === normalizedAddress.toLowerCase() && tx.value !== '0') {
+                            const amount = parseInt(tx.value) / Math.pow(10, 18);
+                            const date = new Date(parseInt(tx.timeStamp) * 1000);
+
+                            // Skip very small amounts (likely fees/dust)
+                            if (amount > 1) {
+                                transactions.push({
+                                    type: 'BUY',
+                                    asset: 'XDC',
+                                    qty: amount,
+                                    date: date.toISOString().split('T')[0],
+                                    timestamp: date.getTime(),
+                                    hash: tx.hash,
+                                    from: tx.from
+                                });
+                            }
                         }
                     }
                 }
+            } catch (e) {
+                console.warn('XDC transactions API error:', e.message);
             }
 
+            console.log(`XDC: Trovate ${transactions.length} transazioni`);
             return transactions;
         } catch (e) {
             console.error('Error fetching XDC transactions:', e);
