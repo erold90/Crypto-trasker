@@ -447,7 +447,77 @@
                 </button>
             </div>
 
-            <!-- Nota: Le transazioni sono gestite manualmente in CONFIG.TRANSACTIONS -->
+            <div class="form-actions" style="margin-top: 20px; border-top: 1px solid var(--border); padding-top: 16px;">
+                <button type="button" class="btn btn-wallet" onclick="UI.showAddTransactionModal()">
+                    <span class="icon">➕</span> Aggiungi Acquisto
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Transaction Modal -->
+<div class="modal" id="addTransactionModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>➕ Aggiungi Acquisto</h2>
+            <button class="modal-close" onclick="UI.hideModal('addTransactionModal')">×</button>
+        </div>
+        <div class="modal-body">
+            <form id="addTransactionForm" onsubmit="UI.saveNewTransaction(event)">
+                <!-- Asset Selection -->
+                <div class="form-group">
+                    <label for="txAsset">Asset</label>
+                    <select id="txAsset" required onchange="UI.updateTransactionQtyDiff()">
+                        <option value="XRP">XRP</option>
+                        <option value="QNT">QNT</option>
+                        <option value="HBAR">HBAR</option>
+                        <option value="XDC">XDC</option>
+                    </select>
+                </div>
+
+                <!-- Quantity with auto-calc -->
+                <div class="form-group">
+                    <label for="txQty">
+                        Quantità
+                        <span id="txQtyHint" class="form-hint"></span>
+                    </label>
+                    <input type="number" id="txQty" step="any" required placeholder="es. 10" onchange="UI.updateTransactionTotal()">
+                </div>
+
+                <!-- Price EUR -->
+                <div class="form-group">
+                    <label for="txPriceEUR">Prezzo Acquisto (EUR)</label>
+                    <input type="number" id="txPriceEUR" step="any" required placeholder="es. 89.50" onchange="UI.updateTransactionTotal()">
+                </div>
+
+                <!-- Date -->
+                <div class="form-group">
+                    <label for="txDate">Data Acquisto</label>
+                    <input type="date" id="txDate" required>
+                </div>
+
+                <!-- Note -->
+                <div class="form-group">
+                    <label for="txNote">Note (opzionale)</label>
+                    <input type="text" id="txNote" placeholder="es. Uphold, Nexo...">
+                </div>
+
+                <!-- Total calculated -->
+                <div class="form-group" style="background: var(--card-bg); padding: 12px; border-radius: 8px; margin-top: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="color: var(--text-secondary);">Totale Investito:</span>
+                        <strong id="txTotalEUR" style="font-size: 1.2em; color: var(--accent);">€0.00</strong>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn" onclick="UI.hideModal('addTransactionModal')">Annulla</button>
+                    <button type="submit" class="btn btn-primary">
+                        <span class="icon">💾</span> Salva Acquisto
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -464,14 +534,14 @@
 </footer>
 
 <!-- JavaScript Modules (v=20251220d for cache busting) -->
-<script src="js/config.js?v=20251220f"></script>
-<script src="js/api.js?v=20251220f"></script>
-<script src="js/portfolio.js?v=20251220f"></script>
-<script src="js/analysis.js?v=20251220f"></script>
-<script src="js/charts.js?v=20251220f"></script>
-<script src="js/calculator.js?v=20251220f"></script>
-<script src="js/wallet.js?v=20251220f"></script>
-<script src="js/app.js?v=20251220f"></script>
+<script src="js/config.js?v=20251220g"></script>
+<script src="js/api.js?v=20251220g"></script>
+<script src="js/portfolio.js?v=20251220g"></script>
+<script src="js/analysis.js?v=20251220g"></script>
+<script src="js/charts.js?v=20251220g"></script>
+<script src="js/calculator.js?v=20251220g"></script>
+<script src="js/wallet.js?v=20251220g"></script>
+<script src="js/app.js?v=20251220g"></script>
 
 <!-- Clear Cache Function -->
 <script>

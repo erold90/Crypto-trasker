@@ -794,8 +794,133 @@ const UI = {
         this.showWalletModal(); // Refresh modal
     },
 
-    // Nota: Le transazioni sono ora gestite manualmente in CONFIG.TRANSACTIONS
-    // con i prezzi reali di acquisto (dati da Crypto Ledger Tracker)
+    // ============================================
+    // ADD NEW TRANSACTION
+    // ============================================
+
+    // Show add transaction modal
+    showAddTransactionModal() {
+        // Set default date to today
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('txDate').value = today;
+
+        // Reset form
+        document.getElementById('txQty').value = '';
+        document.getElementById('txPriceEUR').value = '';
+        document.getElementById('txNote').value = '';
+        document.getElementById('txTotalEUR').textContent = '€0.00';
+
+        // Update qty hint for selected asset
+        this.updateTransactionQtyDiff();
+
+        this.showModal('addTransactionModal');
+    },
+
+    // Calculate and show quantity difference (wallet qty - transactions qty)
+    updateTransactionQtyDiff() {
+        const symbol = document.getElementById('txAsset').value;
+        const hintEl = document.getElementById('txQtyHint');
+        const qtyInput = document.getElementById('txQty');
+
+        // Get current wallet balance
+        const asset = state.portfolio.find(a => a.symbol === symbol);
+        const walletQty = asset ? parseFloat(asset.qty) || 0 : 0;
+
+        // Get total qty from transactions
+        const txQty = state.transactions
+            .filter(tx => tx.asset === symbol && tx.type === 'BUY')
+            .reduce((sum, tx) => sum + (parseFloat(tx.qty) || 0), 0);
+
+        // Calculate difference
+        const diff = walletQty - txQty;
+
+        if (diff > 0.01) {
+            hintEl.textContent = `(Differenza: +${diff.toFixed(2)} ${symbol})`;
+            hintEl.style.color = 'var(--success)';
+            // Auto-fill quantity with difference
+            qtyInput.value = diff.toFixed(4);
+            this.updateTransactionTotal();
+        } else if (diff < -0.01) {
+            hintEl.textContent = `(Eccedenza: ${diff.toFixed(2)} ${symbol})`;
+            hintEl.style.color = 'var(--warning)';
+        } else {
+            hintEl.textContent = '(Bilancio OK)';
+            hintEl.style.color = 'var(--text-secondary)';
+        }
+    },
+
+    // Update total EUR when qty or price changes
+    updateTransactionTotal() {
+        const qty = parseFloat(document.getElementById('txQty').value) || 0;
+        const price = parseFloat(document.getElementById('txPriceEUR').value) || 0;
+        const total = qty * price;
+        document.getElementById('txTotalEUR').textContent = `€${total.toFixed(2)}`;
+    },
+
+    // Save new transaction
+    saveNewTransaction(event) {
+        event.preventDefault();
+
+        const symbol = document.getElementById('txAsset').value;
+        const qty = parseFloat(document.getElementById('txQty').value);
+        const priceEUR = parseFloat(document.getElementById('txPriceEUR').value);
+        const date = document.getElementById('txDate').value;
+        const note = document.getElementById('txNote').value || `Acquisto ${symbol}`;
+
+        if (!qty || qty <= 0 || !priceEUR || priceEUR <= 0 || !date) {
+            this.showToast('Compila tutti i campi obbligatori', 'error');
+            return;
+        }
+
+        // Create new transaction
+        const newTx = {
+            id: Date.now(),
+            date: date,
+            type: 'BUY',
+            asset: symbol,
+            qty: qty,
+            priceEUR: priceEUR,
+            note: note
+        };
+
+        // Add to state
+        state.transactions.push(newTx);
+
+        // Sort by date
+        state.transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        // Update portfolio costBasisEUR and originalQty
+        const asset = state.portfolio.find(a => a.symbol === symbol);
+        if (asset) {
+            // Add to costBasisEUR
+            const addedCost = qty * priceEUR;
+            asset.costBasisEUR = (asset.costBasisEUR || 0) + addedCost;
+
+            // Add to originalQty
+            asset.originalQty = (asset.originalQty || 0) + qty;
+
+            // Recalculate avgPriceEUR
+            asset.avgPriceEUR = asset.costBasisEUR / asset.originalQty;
+
+            console.log(`${symbol}: Aggiunto acquisto €${addedCost.toFixed(2)}, nuovo totale investito: €${asset.costBasisEUR.toFixed(2)}`);
+        }
+
+        // Save to localStorage
+        savePortfolio();
+        saveTransactions();
+
+        // Regenerate historical snapshots
+        generateAndSaveHistoricalSnapshots();
+
+        // Refresh UI
+        Analysis.runAll();
+        this.renderAll();
+
+        // Close modal
+        this.hideModal('addTransactionModal');
+
+        this.showToast(`Acquisto ${qty.toFixed(2)} ${symbol} salvato!`, 'success');
+    }
 };
 
 // Initialize on DOM ready with error boundary
