@@ -377,8 +377,8 @@ const Portfolio = {
     
     // Get portfolio history (for chart)
     // Calcola il valore del portfolio in modo INCREMENTALE basandosi sulle transazioni
-    // Mostra il valore reale che avevi a ogni data, non il valore attuale proiettato indietro
-    // Con memoization per evitare ricalcoli inutili
+    // Usa lookup per DATA (non per indice) per correggere allineamento prezzi
+    // Per timeframe ALL, parte dalla prima transazione
     getPortfolioHistory() {
         if (!state.portfolio.length) return [];
 
@@ -392,25 +392,24 @@ const Portfolio = {
         if (this._historyCache.data &&
             this._historyCache.key === cacheKey &&
             this._historyCache.lastUpdate &&
-            (Date.now() - this._historyCache.lastUpdate) < 30000) {  // Cache valid for 30s
+            (Date.now() - this._historyCache.lastUpdate) < 30000) {
             return this._historyCache.data;
         }
-
-        const firstAsset = state.portfolio[0];
-        const baseHistory = state.history[firstAsset.symbol];
-
-        if (!baseHistory) return [];
-
-        const limit = state.timeRange === 0 ? baseHistory.length : Math.min(state.timeRange, baseHistory.length);
-        const startIdx = baseHistory.length - limit;
 
         // Prepara le transazioni ordinate per data
         const sortedTx = [...state.transactions]
             .filter(tx => tx.type === 'BUY')
             .sort((a, b) => new Date(a.date) - new Date(b.date));
 
+        if (sortedTx.length === 0) {
+            console.log('📊 No BUY transactions found');
+            return [];
+        }
+
         // Crea una mappa di prezzi storici per ogni asset e data
         const priceMap = {};
+        const allDates = new Set();
+
         state.portfolio.forEach(asset => {
             priceMap[asset.symbol] = {};
             const assetHistory = state.history[asset.symbol];
@@ -418,26 +417,54 @@ const Portfolio = {
                 assetHistory.forEach(h => {
                     const dateStr = new Date(h.time * 1000).toISOString().split('T')[0];
                     priceMap[asset.symbol][dateStr] = h.close;
+                    allDates.add(dateStr);
                 });
             }
         });
 
+        // Ordina tutte le date disponibili
+        const sortedDates = Array.from(allDates).sort();
+
+        if (sortedDates.length === 0) {
+            console.log('📊 No price history available');
+            return [];
+        }
+
+        // Determina la data di inizio
+        const firstTxDate = sortedTx[0].date;
+        const today = new Date().toISOString().split('T')[0];
+
+        let startDate;
+        if (state.timeRange === 0) {
+            // ALL: parti dalla prima transazione
+            startDate = firstTxDate;
+        } else {
+            // Timeframe specifico: parti da N giorni fa
+            const daysAgo = new Date();
+            daysAgo.setDate(daysAgo.getDate() - state.timeRange);
+            const daysAgoStr = daysAgo.toISOString().split('T')[0];
+            // Ma non prima della prima transazione
+            startDate = daysAgoStr > firstTxDate ? daysAgoStr : firstTxDate;
+        }
+
         const rate = state.currency === 'EUR' ? this.getConversionRate() : 1;
 
-        console.log(`📊 Chart: Calculating incremental portfolio history, ${sortedTx.length} transactions`);
+        console.log(`📊 Chart: Building history from ${startDate} to ${today}, ${sortedTx.length} transactions`);
 
         const history = [];
+        const lastKnownPrice = {};  // Per gestire date senza prezzo
 
-        for (let i = startIdx; i < baseHistory.length; i++) {
-            const timestamp = baseHistory[i].time * 1000;
-            const dateStr = new Date(timestamp).toISOString().split('T')[0];
+        // Filtra le date dal startDate in poi
+        const relevantDates = sortedDates.filter(d => d >= startDate && d <= today);
+
+        for (const dateStr of relevantDates) {
+            const timestamp = new Date(dateStr).getTime();
 
             // Calcola quali asset e quantità avevi a questa data
             const holdings = {};
             let invested = 0;
 
             for (const tx of sortedTx) {
-                // Considera solo transazioni fino a questa data
                 if (tx.date > dateStr) break;
 
                 const symbol = tx.asset;
@@ -445,27 +472,43 @@ const Portfolio = {
                 const price = parseFloat(tx.price) || 0;
 
                 holdings[symbol] = (holdings[symbol] || 0) + qty;
-                invested += qty * price;  // Costo in USD
+                invested += qty * price;
             }
 
-            // Calcola il valore del portfolio a questa data
+            // Se non abbiamo ancora holdings, salta questa data
+            if (Object.keys(holdings).length === 0) continue;
+
+            // Calcola il valore del portfolio usando lookup per DATA
             let dayValue = 0;
+            let hasValidPrice = false;
+
             for (const [symbol, qty] of Object.entries(holdings)) {
-                const assetHistory = state.history[symbol];
-                if (assetHistory && assetHistory[i]) {
-                    dayValue += assetHistory[i].close * qty;
+                // Cerca il prezzo per questa data specifica
+                let price = priceMap[symbol]?.[dateStr];
+
+                // Se non c'è prezzo per questa data, usa l'ultimo prezzo noto
+                if (!price && lastKnownPrice[symbol]) {
+                    price = lastKnownPrice[symbol];
+                }
+
+                if (price && price > 0) {
+                    dayValue += price * qty;
+                    lastKnownPrice[symbol] = price;
+                    hasValidPrice = true;
                 }
             }
 
-            // Converti se EUR
-            dayValue *= rate;
-
-            history.push({
-                time: timestamp,
-                value: dayValue,
-                invested: invested * rate  // Salva anche l'investito per questa data
-            });
+            // Aggiungi solo se abbiamo almeno un prezzo valido
+            if (hasValidPrice && dayValue > 0) {
+                history.push({
+                    time: timestamp,
+                    value: dayValue * rate,
+                    invested: invested * rate
+                });
+            }
         }
+
+        console.log(`📊 Generated ${history.length} data points`);
 
         // Update cache
         this._historyCache = {

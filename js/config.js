@@ -4,11 +4,28 @@
 
 const CONFIG = {
     // API Configuration
-    API_KEY: "73be90ad076a9a24abd824e9725f034ad1b8bef2adc76b4eab37e26684ee2c86",
-    
+    // When USE_PROXY is true, API calls go through /api/* endpoints (Vercel deployment)
+    // When false, direct API calls are used (requires API keys in frontend - less secure)
+    USE_PROXY: window.location.hostname !== 'erold90.github.io',  // Auto-detect: use proxy except on GitHub Pages
+
+    // Direct API endpoints (used when USE_PROXY is false)
+    // WARNING: API keys are exposed in frontend when using direct mode
+    API_KEY: "",  // REMOVED - Use proxy instead
+    ETHERSCAN_API_KEY: "",  // REMOVED - Use proxy instead
+
     APIS: {
-        CRYPTOCOMPARE: 'https://min-api.cryptocompare.com/data',
-        FNG: 'https://api.alternative.me/fng/'
+        // Proxy endpoints (secure - API keys stored on server)
+        PROXY: {
+            CRYPTO: '/api/crypto',
+            ETHERSCAN: '/api/etherscan',
+            FNG: '/api/fng'
+        },
+        // Direct endpoints (for GitHub Pages fallback - requires API keys in frontend)
+        DIRECT: {
+            CRYPTOCOMPARE: 'https://min-api.cryptocompare.com/data',
+            ETHERSCAN: 'https://api.etherscan.io/v2/api',
+            FNG: 'https://api.alternative.me/fng/'
+        }
     },
     
     // Auto-refresh intervals (milliseconds)

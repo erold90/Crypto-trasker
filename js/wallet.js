@@ -34,8 +34,8 @@ const Wallet = {
     // QNT token contract address on Ethereum
     QNT_CONTRACT: '0x4a220E6096B25EADb88358cb44068A3248254675',
 
-    // Etherscan API key (free tier: 5 calls/sec, 100k calls/day)
-    ETHERSCAN_API_KEY: 'X5NADVXS5711WTDXEQIAY34WJ1HXAGA5FE',
+    // Etherscan API key is now handled by server-side proxy
+    // See /api/etherscan.js for the secure implementation
 
     // psXDC token contract address (Prime Staked XDC - liquid staking)
     PSXDC_CONTRACT: '0x9B8e12b0BAC165B86967E771d98B520Ec3F665A6',
@@ -144,8 +144,15 @@ const Wallet = {
         if (!address) return null;
 
         try {
-            // Using Etherscan V2 API with chainid=1 (Ethereum mainnet)
-            const url = `${this.APIS.ETHEREUM}?chainid=1&module=account&action=tokenbalance&contractaddress=${this.QNT_CONTRACT}&address=${address}&tag=latest&apikey=${this.ETHERSCAN_API_KEY}`;
+            // Build URL based on proxy mode
+            let url;
+            if (CONFIG.USE_PROXY) {
+                // Use proxy endpoint
+                url = `${window.location.origin}${CONFIG.APIS.PROXY.ETHERSCAN}?module=account&action=tokenbalance&contractaddress=${this.QNT_CONTRACT}&address=${address}&tag=latest`;
+            } else {
+                // Direct call (requires API key in config - for GitHub Pages fallback)
+                url = `${this.APIS.ETHEREUM}?chainid=1&module=account&action=tokenbalance&contractaddress=${this.QNT_CONTRACT}&address=${address}&tag=latest&apikey=${CONFIG.ETHERSCAN_API_KEY || ''}`;
+            }
 
             const response = await this.fetchWithTimeout(url);
             const data = await response.json();
@@ -558,7 +565,15 @@ const Wallet = {
         if (!address) return [];
 
         try {
-            const url = `${this.APIS.ETHEREUM}?chainid=1&module=account&action=tokentx&contractaddress=${this.QNT_CONTRACT}&address=${address}&sort=asc&apikey=${this.ETHERSCAN_API_KEY}`;
+            // Build URL based on proxy mode
+            let url;
+            if (CONFIG.USE_PROXY) {
+                // Use proxy endpoint
+                url = `${window.location.origin}${CONFIG.APIS.PROXY.ETHERSCAN}?module=account&action=tokentx&contractaddress=${this.QNT_CONTRACT}&address=${address}&sort=asc`;
+            } else {
+                // Direct call (for GitHub Pages fallback)
+                url = `${this.APIS.ETHEREUM}?chainid=1&module=account&action=tokentx&contractaddress=${this.QNT_CONTRACT}&address=${address}&sort=asc&apikey=${CONFIG.ETHERSCAN_API_KEY || ''}`;
+            }
             const response = await fetch(url);
             const data = await response.json();
             const transactions = [];
@@ -708,8 +723,21 @@ const Wallet = {
     // Fetch historical price for a specific date
     async fetchHistoricalPrice(symbol, timestamp) {
         try {
-            // CryptoCompare API for historical price
-            const url = `https://min-api.cryptocompare.com/data/pricehistorical?fsym=${symbol}&tsyms=EUR,USD&ts=${Math.floor(timestamp / 1000)}&api_key=${CONFIG.API_KEY}`;
+            // Build URL based on proxy mode
+            let url;
+            if (CONFIG.USE_PROXY) {
+                // Use proxy endpoint
+                const proxyUrl = new URL(CONFIG.APIS.PROXY.CRYPTO, window.location.origin);
+                proxyUrl.searchParams.set('endpoint', 'pricehistorical');
+                proxyUrl.searchParams.set('fsym', symbol);
+                proxyUrl.searchParams.set('tsyms', 'EUR,USD');
+                proxyUrl.searchParams.set('ts', Math.floor(timestamp / 1000).toString());
+                url = proxyUrl.toString();
+            } else {
+                // Direct call (for GitHub Pages fallback)
+                url = `https://min-api.cryptocompare.com/data/pricehistorical?fsym=${symbol}&tsyms=EUR,USD&ts=${Math.floor(timestamp / 1000)}&api_key=${CONFIG.API_KEY || ''}`;
+            }
+
             const response = await fetch(url);
 
             if (!response.ok) {

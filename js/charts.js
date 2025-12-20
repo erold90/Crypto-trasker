@@ -21,9 +21,9 @@ const Charts = {
         }
     },
     
-    // Get BTC comparison data - INCREMENTAL
+    // Get BTC comparison data - INCREMENTAL con lookup per DATA
     // Calcola quanto BTC avresti potuto comprare con ogni transazione
-    // e mostra il valore cumulativo nel tempo
+    // e mostra il valore cumulativo nel tempo, allineato alla portfolioHistory
     getBtcComparisonData(portfolioHistory) {
         if (!portfolioHistory.length) return null;
 
@@ -44,42 +44,36 @@ const Charts = {
             btcPriceMap[dateStr] = h.close;
         });
 
-        const limit = state.timeRange === 0 ? btcHistory.length : Math.min(state.timeRange, btcHistory.length);
-        const startIdx = btcHistory.length - limit;
         const conversionRate = state.currency === 'EUR' ? Portfolio.getConversionRate() : 1;
 
-        console.log(`📊 BTC Comparison: Calculating incremental BTC comparison, ${sortedTx.length} transactions`);
+        console.log(`📊 BTC Comparison: ${sortedTx.length} transactions, ${portfolioHistory.length} data points`);
 
-        // Calcola i BTC cumulativi a ogni punto nel tempo
+        // Calcola i BTC cumulativi allineandosi ai punti della portfolioHistory
         const btcData = [];
+        let lastKnownBtcPrice = btcHistory[btcHistory.length - 1]?.close || 1;
 
-        for (let i = startIdx; i < btcHistory.length; i++) {
-            const timestamp = btcHistory[i].time * 1000;
-            const dateStr = new Date(timestamp).toISOString().split('T')[0];
-            const btcPriceToday = btcHistory[i].close;
+        for (const point of portfolioHistory) {
+            const dateStr = new Date(point.time).toISOString().split('T')[0];
+
+            // Prezzo BTC per questa data
+            const btcPriceToday = btcPriceMap[dateStr] || lastKnownBtcPrice;
+            if (btcPriceMap[dateStr]) lastKnownBtcPrice = btcPriceMap[dateStr];
 
             // Calcola quanti BTC avresti accumulato fino a questa data
             let totalBtcAccumulated = 0;
 
             for (const tx of sortedTx) {
-                // Considera solo transazioni fino a questa data
                 if (tx.date > dateStr) break;
 
-                // Quanto hai investito in questa transazione (in USD)
                 const investedUSD = (parseFloat(tx.qty) || 0) * (parseFloat(tx.price) || 0);
-
-                // Prezzo BTC alla data della transazione
                 const btcPriceAtTx = btcPriceMap[tx.date] || btcPriceToday;
-
-                // Quanti BTC avresti potuto comprare
                 const btcBought = investedUSD / btcPriceAtTx;
 
                 totalBtcAccumulated += btcBought;
             }
 
-            // Valore dei BTC accumulati a oggi
+            // Valore dei BTC accumulati a questa data
             const btcValue = totalBtcAccumulated * btcPriceToday * conversionRate;
-
             btcData.push(btcValue);
         }
 
@@ -303,7 +297,8 @@ const Charts = {
                             unit: state.timeRange <= 1 ? 'hour' :
                                   state.timeRange <= 7 ? 'day' :
                                   state.timeRange <= 30 ? 'day' :
-                                  state.timeRange <= 90 ? 'week' : 'month',
+                                  state.timeRange <= 90 ? 'week' :
+                                  state.timeRange <= 365 ? 'month' : 'month',  // ALL usa month
                             displayFormats: {
                                 hour: 'HH:mm',
                                 day: 'd MMM',
@@ -320,7 +315,7 @@ const Charts = {
                                 family: "'JetBrains Mono', monospace",
                                 size: 11
                             },
-                            maxTicksLimit: state.timeRange <= 7 ? 7 : 12
+                            maxTicksLimit: state.timeRange === 0 ? 12 : (state.timeRange <= 7 ? 7 : 12)  // ALL usa 12 tick
                         }
                     },
                     y: {
