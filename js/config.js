@@ -96,10 +96,11 @@ const CONFIG = {
         { id: 11, date: '2025-09-26', type: 'BUY', asset: 'XDC', qty: 30000, priceEUR: 0.0640, note: 'Uphold - Quarta tranche XDC' },
         { id: 12, date: '2025-11-04', type: 'BUY', asset: 'XDC', qty: 211.82, priceEUR: 0.0472, note: 'Uphold - Test XDC' },
 
-        // QNT - Acquisti Nov 2025
+        // QNT - Acquisti Aug-Dec 2025
         { id: 13, date: '2025-08-21', type: 'BUY', asset: 'QNT', qty: 29.67, priceEUR: 117.80, note: 'Swap XLM→QNT via Exodus (origine €3495)' },
         { id: 14, date: '2025-11-22', type: 'BUY', asset: 'QNT', qty: 30, priceEUR: 64.135, note: 'Uphold - QNT' },
-        { id: 15, date: '2025-11-22', type: 'BUY', asset: 'QNT', qty: 1, priceEUR: 13.00, note: 'Uphold - Test QNT' }
+        { id: 15, date: '2025-11-22', type: 'BUY', asset: 'QNT', qty: 1, priceEUR: 13.00, note: 'Uphold - Test QNT' },
+        { id: 16, date: '2025-12-16', type: 'BUY', asset: 'QNT', qty: 9.3676, priceEUR: 66.42, note: 'Uphold - QNT' }
     ],
     
     // Default Portfolio (solo struttura base - i valori vengono calcolati da TRANSACTIONS)
@@ -107,7 +108,7 @@ const CONFIG = {
     // costBasisEUR, avgPriceEUR, originalQty = calcolati automaticamente da recalculateFromTransactions()
     DEFAULT_PORTFOLIO: [
         { symbol: 'XRP', name: 'XRP', qty: 10001.87 },
-        { symbol: 'QNT', name: 'Quant', qty: 70.04 },
+        { symbol: 'QNT', name: 'Quant', qty: 79.41 },
         { symbol: 'HBAR', name: 'Hedera', qty: 40082.41 },
         { symbol: 'XDC', name: 'XDC Network', qty: 100402.25 }
     ],
