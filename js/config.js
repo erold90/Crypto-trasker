@@ -312,9 +312,9 @@ function savePortfolioSnapshot(totalValue, totalInvested, pnl) {
             snapshots.push(snapshot);
         }
 
-        // Keep only last 365 days
+        // Keep 2 years of history for ALL timeframe
         const cutoffDate = new Date();
-        cutoffDate.setDate(cutoffDate.getDate() - 365);
+        cutoffDate.setDate(cutoffDate.getDate() - 730);
         const filtered = snapshots.filter(s => new Date(s.date) >= cutoffDate);
 
         // Sort by date
@@ -503,9 +503,9 @@ function generateAndSaveHistoricalSnapshots() {
     const mergedSnapshots = Object.values(snapshotMap)
         .sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    // Keep only last 365 days
+    // Keep 2 years of history for ALL timeframe
     const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - 365);
+    cutoffDate.setDate(cutoffDate.getDate() - 730);
     const filtered = mergedSnapshots.filter(s => new Date(s.date) >= cutoffDate);
 
     // Save

@@ -155,32 +155,101 @@ const API = {
         }
     },
 
+    // Load price history from localStorage cache
+    loadPriceHistoryCache() {
+        try {
+            const cached = localStorage.getItem('cpt_price_history_v1');
+            if (cached) {
+                const data = JSON.parse(cached);
+                console.log('📦 Loaded price history cache from localStorage');
+                return data;
+            }
+        } catch (e) {
+            console.warn('Error loading price history cache:', e);
+        }
+        return {};
+    },
+
+    // Save price history to localStorage cache
+    savePriceHistoryCache() {
+        try {
+            // Only save the time and close values to save space
+            const cacheData = {};
+            for (const [symbol, history] of Object.entries(state.history)) {
+                if (Array.isArray(history) && history.length > 0) {
+                    cacheData[symbol] = history.map(h => ({
+                        time: h.time,
+                        close: h.close
+                    }));
+                }
+            }
+            localStorage.setItem('cpt_price_history_v1', JSON.stringify(cacheData));
+            console.log('💾 Saved price history cache to localStorage');
+        } catch (e) {
+            console.warn('Error saving price history cache:', e);
+        }
+    },
+
+    // Merge cached history with new API data
+    mergeHistoryData(cached, newData) {
+        if (!cached || !cached.length) return newData || [];
+        if (!newData || !newData.length) return cached;
+
+        // Create a map of all data points by timestamp
+        const dataMap = {};
+
+        // Add cached data first (older data)
+        cached.forEach(d => {
+            if (d.time) dataMap[d.time] = d;
+        });
+
+        // Add new data (overwrites if same timestamp)
+        newData.forEach(d => {
+            if (d.time) dataMap[d.time] = d;
+        });
+
+        // Convert back to array and sort by time
+        return Object.values(dataMap).sort((a, b) => a.time - b.time);
+    },
+
     // Fetch historical data for all assets
     async fetchHistory() {
         const symbols = [...state.portfolio.map(a => a.symbol), 'BTC'];
 
-        const promises = symbols.map(async (symbol) => {
-            // Skip if already cached and recent (730 days = 2 years)
-            if (state.history[symbol]?.length >= 730) return;
+        // Load cached price history from localStorage
+        const cachedHistory = this.loadPriceHistoryCache();
 
+        const promises = symbols.map(async (symbol) => {
             try {
                 const url = this.buildCryptoUrl('v2/histoday', {
                     fsym: symbol,
                     tsym: 'USD',
-                    limit: '730'  // 2 anni per supportare ALL timeframe
+                    limit: '730'  // Request 2 years (API may return less)
                 });
 
                 const res = await fetch(url);
                 const data = await res.json();
+                const newData = data.Data?.Data || [];
 
-                state.history[symbol] = data.Data?.Data || [];
+                // Merge with cached data (keeps older data from localStorage)
+                const cachedSymbol = cachedHistory[symbol] || [];
+                state.history[symbol] = this.mergeHistoryData(cachedSymbol, newData);
+
+                console.log(`${symbol}: ${state.history[symbol].length} data points (${cachedSymbol.length} cached + ${newData.length} new)`);
 
             } catch (e) {
                 console.error(`Error fetching history for ${symbol}:`, e);
+                // Use cached data if API fails
+                if (cachedHistory[symbol]) {
+                    state.history[symbol] = cachedHistory[symbol];
+                }
             }
         });
 
         await Promise.all(promises);
+
+        // Save merged history to localStorage for future use
+        this.savePriceHistoryCache();
 
         // Analyze BTC trend
         this.analyzeBTCTrend();
