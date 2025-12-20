@@ -219,23 +219,53 @@ const API = {
         // Load cached price history from localStorage
         const cachedHistory = this.loadPriceHistoryCache();
 
+        // Check if we need to seed older data (first run or insufficient data)
+        const needsSeeding = !cachedHistory.XRP || cachedHistory.XRP.length < 500;
+
         const promises = symbols.map(async (symbol) => {
             try {
+                // Fetch recent data (last 365 days)
                 const url = this.buildCryptoUrl('v2/histoday', {
                     fsym: symbol,
                     tsym: 'USD',
-                    limit: '730'  // Request 2 years (API may return less)
+                    limit: '365'
                 });
 
                 const res = await fetch(url);
                 const data = await res.json();
-                const newData = data.Data?.Data || [];
+                let newData = data.Data?.Data || [];
+
+                // If seeding needed, also fetch older data (365-730 days ago)
+                if (needsSeeding && newData.length > 0) {
+                    const oldestTimestamp = newData[0]?.time;
+                    if (oldestTimestamp) {
+                        try {
+                            const olderUrl = this.buildCryptoUrl('v2/histoday', {
+                                fsym: symbol,
+                                tsym: 'USD',
+                                limit: '365',
+                                toTs: (oldestTimestamp - 86400).toString()  // 1 day before oldest
+                            });
+                            const olderRes = await fetch(olderUrl);
+                            const olderData = await olderRes.json();
+                            const olderDays = olderData.Data?.Data || [];
+
+                            if (olderDays.length > 0) {
+                                // Prepend older data
+                                newData = [...olderDays, ...newData];
+                                console.log(`${symbol}: Seeded ${olderDays.length} older data points`);
+                            }
+                        } catch (e) {
+                            console.warn(`${symbol}: Could not fetch older data:`, e.message);
+                        }
+                    }
+                }
 
                 // Merge with cached data (keeps older data from localStorage)
                 const cachedSymbol = cachedHistory[symbol] || [];
                 state.history[symbol] = this.mergeHistoryData(cachedSymbol, newData);
 
-                console.log(`${symbol}: ${state.history[symbol].length} data points (${cachedSymbol.length} cached + ${newData.length} new)`);
+                console.log(`${symbol}: ${state.history[symbol].length} total data points`);
 
             } catch (e) {
                 console.error(`Error fetching history for ${symbol}:`, e);
