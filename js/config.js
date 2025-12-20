@@ -108,7 +108,7 @@ const CONFIG = {
     // costBasisEUR, avgPriceEUR, originalQty = calcolati automaticamente da recalculateFromTransactions()
     DEFAULT_PORTFOLIO: [
         { symbol: 'XRP', name: 'XRP', qty: 10001.87 },
-        { symbol: 'QNT', name: 'Quant', qty: 79.41 },
+        { symbol: 'QNT', name: 'Quant', qty: 70.04 },
         { symbol: 'HBAR', name: 'Hedera', qty: 40082.41 },
         { symbol: 'XDC', name: 'XDC Network', qty: 100402.25 }
     ],
