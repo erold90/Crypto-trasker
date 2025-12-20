@@ -528,14 +528,22 @@ const Charts = {
     },
     
     // Set time range
-    setTimeRange(days) {
+    async setTimeRange(days) {
         state.timeRange = days;
-        
+
         // Update buttons
         document.querySelectorAll('.chart-range-btn').forEach(btn => {
             btn.classList.toggle('active', parseInt(btn.dataset.range) === days);
         });
-        
+
+        // Load hourly data for 1D/1W views
+        if (days <= 7) {
+            const hours = days === 1 ? 24 : 168;  // 24 hours or 7 days worth
+            UI.showLoading(true);
+            await API.fetchHourlyHistory(hours);
+            UI.showLoading(false);
+        }
+
         this.renderMain();
     }
 };

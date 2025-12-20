@@ -269,8 +269,14 @@ const Portfolio = {
     
     // Get portfolio history (for chart)
     // Combines real snapshots (when available) with estimated values (from price history)
+    // Uses hourly data for 1D/1W views
     getPortfolioHistory() {
         if (!state.portfolio.length) return [];
+
+        // Use hourly data for short timeframes (1D, 1W)
+        if (state.timeRange <= 7 && state.hourlyHistory) {
+            return this.getHourlyPortfolioHistory();
+        }
 
         const firstAsset = state.portfolio[0];
         const baseHistory = state.history[firstAsset.symbol];
@@ -331,7 +337,53 @@ const Portfolio = {
 
         return history;
     },
-    
+
+    // Get hourly portfolio history for 1D/1W views
+    getHourlyPortfolioHistory() {
+        const firstAsset = state.portfolio[0];
+        const baseHistory = state.hourlyHistory?.[firstAsset.symbol];
+
+        if (!baseHistory || !baseHistory.length) {
+            console.log('📊 No hourly data available');
+            return [];
+        }
+
+        // For 1D use last 24 hours, for 1W use last 168 hours
+        const hoursToShow = state.timeRange === 1 ? 24 : 168;
+        const limit = Math.min(hoursToShow, baseHistory.length);
+        const startIdx = Math.max(0, baseHistory.length - limit);
+
+        console.log(`📊 Hourly Chart: ${limit} hours, timeRange=${state.timeRange}`);
+
+        const history = [];
+
+        for (let i = startIdx; i < baseHistory.length; i++) {
+            const timestamp = baseHistory[i].time * 1000;
+            let hourValue = 0;
+
+            // Calculate portfolio value at this hour
+            state.portfolio.forEach(asset => {
+                const assetHistory = state.hourlyHistory?.[asset.symbol];
+                if (assetHistory && assetHistory[i]) {
+                    const qty = parseFloat(asset.qty) || 0;
+                    hourValue += assetHistory[i].close * qty;
+                }
+            });
+
+            // Convert if EUR
+            if (state.currency === 'EUR') {
+                hourValue *= this.getConversionRate();
+            }
+
+            history.push({
+                time: timestamp,
+                value: hourValue
+            });
+        }
+
+        return history;
+    },
+
     // Get transaction markers for chart
     getTransactionMarkers() {
         return state.transactions.map(tx => ({

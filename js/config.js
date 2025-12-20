@@ -123,10 +123,11 @@ const state = {
     portfolio: [],
     transactions: [],
     targets: [],
-    
+
     // Market Data
     prices: {},           // { symbol: { USD: {...}, EUR: {...} } }
-    history: {},          // { symbol: [...days] }
+    history: {},          // { symbol: [...days] } - daily data
+    hourlyHistory: {},    // { symbol: [...hours] } - hourly data for 1D/1W
     changes: {},          // { symbol: { d1: %, d7: %, d30: % } }
     
     // Indicators

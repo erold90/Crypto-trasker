@@ -120,27 +120,51 @@ const API = {
     // Fetch historical data for all assets
     async fetchHistory() {
         const symbols = [...state.portfolio.map(a => a.symbol), 'BTC'];
-        
+
         const promises = symbols.map(async (symbol) => {
             // Skip if already cached and recent
             if (state.history[symbol]?.length >= 365) return;
-            
+
             try {
                 const url = `${CONFIG.APIS.CRYPTOCOMPARE}/v2/histoday?fsym=${symbol}&tsym=USD&limit=365&api_key=${CONFIG.API_KEY}`;
                 const res = await fetch(url);
                 const data = await res.json();
-                
+
                 state.history[symbol] = data.Data?.Data || [];
-                
+
             } catch (e) {
                 console.error(`Error fetching history for ${symbol}:`, e);
             }
         });
-        
+
         await Promise.all(promises);
-        
+
         // Analyze BTC trend
         this.analyzeBTCTrend();
+    },
+
+    // Fetch hourly data for 1D/1W views
+    async fetchHourlyHistory(hours = 24) {
+        const symbols = [...state.portfolio.map(a => a.symbol), 'BTC'];
+
+        // Initialize hourly history if not exists
+        if (!state.hourlyHistory) state.hourlyHistory = {};
+
+        const promises = symbols.map(async (symbol) => {
+            try {
+                const url = `${CONFIG.APIS.CRYPTOCOMPARE}/v2/histohour?fsym=${symbol}&tsym=USD&limit=${hours}&api_key=${CONFIG.API_KEY}`;
+                const res = await fetch(url);
+                const data = await res.json();
+
+                state.hourlyHistory[symbol] = data.Data?.Data || [];
+
+            } catch (e) {
+                console.error(`Error fetching hourly history for ${symbol}:`, e);
+            }
+        });
+
+        await Promise.all(promises);
+        console.log(`Loaded ${hours}h hourly data for ${symbols.length} assets`);
     },
     
     // Analyze BTC trend vs 200 MA
