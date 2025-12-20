@@ -418,20 +418,19 @@ const UI = {
             const value = asset.qty * price;
             const rate = Portfolio.getConversionRate();
 
-            // Usa costBasis per calcoli P&L (più accurato di qty*avgPrice)
+            // Usa costBasisEUR per calcoli P&L (calcolato da transazioni)
             let invested;
-            let avgPriceConverted;
+            let avgPriceDisplay;
 
-            if (asset.costBasis && asset.costBasis > 0) {
-                // costBasis è in USD, il costo totale investito per questo asset
-                invested = asset.costBasis * rate;
-                // PMC = costBasis / quantità originale (non quella sync)
-                const originalQty = Portfolio.getOriginalQty(asset.symbol) || asset.qty;
-                avgPriceConverted = (asset.costBasis / originalQty) * rate;
+            if (asset.costBasisEUR && asset.costBasisEUR > 0) {
+                // costBasisEUR è in EUR, il costo totale investito
+                invested = state.currency === 'EUR' ? asset.costBasisEUR : asset.costBasisEUR * Portfolio.getEurToUsdRate();
+                // PMC = avgPriceEUR (già calcolato da transazioni)
+                avgPriceDisplay = state.currency === 'EUR' ? asset.avgPriceEUR : asset.avgPriceEUR * Portfolio.getEurToUsdRate();
             } else {
-                // Fallback al vecchio metodo
-                avgPriceConverted = asset.avgPrice * rate;
-                invested = asset.qty * avgPriceConverted;
+                // Fallback
+                avgPriceDisplay = 0;
+                invested = 0;
             }
 
             const pnl = value - invested;
@@ -493,9 +492,9 @@ const UI = {
                             : Portfolio.formatNumber(asset.qty, 2)}
                     </td>
                     <td class="pmc-cell">
-                        ${state.isEditing 
-                            ? `<input type="number" class="edit-input" id="avg-${idx}" value="${asset.avgPrice}" step="0.0001">`
-                            : Portfolio.formatPrice(avgPriceConverted)}
+                        ${state.isEditing
+                            ? `<input type="number" class="edit-input" id="avg-${idx}" value="${asset.avgPriceEUR || 0}" step="0.0001">`
+                            : Portfolio.formatPrice(avgPriceDisplay)}
                     </td>
                     <td class="value-cell">
                         ${Portfolio.formatCurrencyCompact(value)}

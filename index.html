@@ -49,16 +49,8 @@
                 <button class="currency-btn active" data-currency="EUR">€ EUR</button>
             </div>
             
-            <button class="btn" id="editBtn">
-                <span class="icon">✏️</span> Modifica
-            </button>
-
-            <button class="btn" onclick="UI.showModal('addTxModal')">
-                <span class="icon">📝</span> Transazione
-            </button>
-
-            <button class="btn btn-wallet" id="syncWalletBtn" title="Sincronizza saldi dai wallet">
-                <span class="icon">🔗</span> Sync Wallet
+            <button class="btn btn-wallet" id="syncWalletBtn" title="Configura wallet e aggiungi transazioni">
+                <span class="icon">⚙️</span> Wallet
             </button>
 
             <button class="btn btn-primary" id="refreshBtn">
@@ -222,9 +214,6 @@
     <div class="table-container" id="assetTable">
         <div class="table-header">
             <div class="card-title">I Tuoi Asset</div>
-            <button class="btn btn-sm" onclick="UI.showModal('addAssetModal')">
-                <span class="icon">➕</span> Aggiungi Asset
-            </button>
         </div>
         <table>
             <thead>
@@ -341,51 +330,6 @@
         </div>
     </div>
     
-</div>
-
-<!-- ADD TRANSACTION MODAL -->
-<div class="modal" id="addTxModal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h2>📝 Registra Transazione</h2>
-            <button class="modal-close" onclick="UI.hideModal('addTxModal')">×</button>
-        </div>
-        <div class="modal-body">
-            <form id="addTxForm" onsubmit="UI.handleAddTransaction(event)">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Tipo</label>
-                        <select id="txType" required>
-                            <option value="BUY">🟢 Acquisto</option>
-                            <option value="SELL">🔴 Vendita</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Asset</label>
-                        <input type="text" id="txAsset" placeholder="Es: XRP, BTC" required>
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Quantità</label>
-                        <input type="number" id="txQty" step="0.00000001" placeholder="0.00" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Prezzo (USD)</label>
-                        <input type="number" id="txPrice" step="0.00000001" placeholder="0.00" required>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>Note (opzionale)</label>
-                    <input type="text" id="txNote" placeholder="Es: Accumulo durante il dip">
-                </div>
-                <div class="form-actions">
-                    <button type="button" class="btn" onclick="UI.hideModal('addTxModal')">Annulla</button>
-                    <button type="submit" class="btn btn-primary">Registra</button>
-                </div>
-            </form>
-        </div>
-    </div>
 </div>
 
 <!-- ADD ASSET MODAL -->
@@ -533,15 +477,15 @@
     </div>
 </footer>
 
-<!-- JavaScript Modules (v=20251220d for cache busting) -->
-<script src="js/config.js?v=20251220h"></script>
-<script src="js/api.js?v=20251220h"></script>
-<script src="js/portfolio.js?v=20251220h"></script>
-<script src="js/analysis.js?v=20251220h"></script>
-<script src="js/charts.js?v=20251220h"></script>
-<script src="js/calculator.js?v=20251220h"></script>
-<script src="js/wallet.js?v=20251220h"></script>
-<script src="js/app.js?v=20251220h"></script>
+<!-- JavaScript Modules (cache busting) -->
+<script src="js/config.js?v=20251220i"></script>
+<script src="js/api.js?v=20251220i"></script>
+<script src="js/portfolio.js?v=20251220i"></script>
+<script src="js/analysis.js?v=20251220i"></script>
+<script src="js/charts.js?v=20251220i"></script>
+<script src="js/calculator.js?v=20251220i"></script>
+<script src="js/wallet.js?v=20251220i"></script>
+<script src="js/app.js?v=20251220i"></script>
 
 <!-- Clear Cache Function -->
 <script>
