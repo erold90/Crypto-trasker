@@ -416,9 +416,26 @@ const UI = {
             
             // Calculate values
             const value = asset.qty * price;
-            const avgPriceConverted = asset.avgPrice * Portfolio.getConversionRate();
-            const pnl = value - (asset.qty * avgPriceConverted);
-            const pnlPct = avgPriceConverted > 0 ? ((price - avgPriceConverted) / avgPriceConverted) * 100 : 0;
+            const rate = Portfolio.getConversionRate();
+
+            // Usa costBasis per calcoli P&L (più accurato di qty*avgPrice)
+            let invested;
+            let avgPriceConverted;
+
+            if (asset.costBasis && asset.costBasis > 0) {
+                // costBasis è in USD, il costo totale investito per questo asset
+                invested = asset.costBasis * rate;
+                // PMC = costBasis / quantità originale (non quella sync)
+                const originalQty = Portfolio.getOriginalQty(asset.symbol) || asset.qty;
+                avgPriceConverted = (asset.costBasis / originalQty) * rate;
+            } else {
+                // Fallback al vecchio metodo
+                avgPriceConverted = asset.avgPrice * rate;
+                invested = asset.qty * avgPriceConverted;
+            }
+
+            const pnl = value - invested;
+            const pnlPct = invested > 0 ? (pnl / invested) * 100 : 0;
             
             // RSI styling
             const rsi = analysis.rsi || 50;
@@ -857,16 +874,28 @@ const UI = {
 
         for (const symbol of symbols) {
             const result = Wallet.calculateAveragePrice(this.pendingImportTransactions, symbol);
-            if (result && result.avgPriceUSD > 0) {
-                // Find asset in portfolio
-                const asset = state.portfolio.find(a => a.symbol === symbol);
-                if (asset) {
-                    // avgPrice deve essere in USD (come nel resto del codice)
-                    asset.avgPrice = result.avgPriceUSD;
-                    console.log(`${symbol}: Updated avgPrice to $${result.avgPriceUSD.toFixed(4)} (€${result.avgPriceEUR.toFixed(4)})`);
+            const asset = state.portfolio.find(a => a.symbol === symbol);
+
+            if (asset && result) {
+                // Aggiorna la quantità dal blockchain
+                if (result.totalQty > 0) {
+                    asset.qty = result.totalQty;
+                    console.log(`${symbol}: Quantità aggiornata a ${result.totalQty}`);
                 }
-            } else if (result) {
-                console.warn(`${symbol}: Prezzo storico non disponibile, avgPrice non aggiornato`);
+
+                // NON sovrascrivere avgPrice/costBasis se già presenti nel CONFIG
+                // (i valori CONFIG sono i prezzi di ACQUISTO reali, non quelli del trasferimento)
+                const defaultAsset = CONFIG.DEFAULT_PORTFOLIO.find(d => d.symbol === symbol);
+
+                if (!asset.costBasis && defaultAsset?.costBasis) {
+                    asset.costBasis = defaultAsset.costBasis;
+                    asset.avgPrice = defaultAsset.avgPrice;
+                    console.log(`${symbol}: Usa costBasis da CONFIG: $${asset.costBasis}`);
+                } else if (!asset.costBasis && result.avgPriceUSD > 0) {
+                    // Solo se non abbiamo costBasis, usa quello calcolato dalla blockchain
+                    asset.avgPrice = result.avgPriceUSD;
+                    console.warn(`${symbol}: Usa avgPrice da blockchain (potrebbe non essere il prezzo di acquisto reale): $${result.avgPriceUSD.toFixed(4)}`);
+                }
             }
         }
 
