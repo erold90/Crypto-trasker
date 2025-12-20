@@ -889,25 +889,12 @@ const UI = {
         // Sort by date
         state.transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-        // Update portfolio costBasisEUR and originalQty
-        const asset = state.portfolio.find(a => a.symbol === symbol);
-        if (asset) {
-            // Add to costBasisEUR
-            const addedCost = qty * priceEUR;
-            asset.costBasisEUR = (asset.costBasisEUR || 0) + addedCost;
-
-            // Add to originalQty
-            asset.originalQty = (asset.originalQty || 0) + qty;
-
-            // Recalculate avgPriceEUR
-            asset.avgPriceEUR = asset.costBasisEUR / asset.originalQty;
-
-            console.log(`${symbol}: Aggiunto acquisto €${addedCost.toFixed(2)}, nuovo totale investito: €${asset.costBasisEUR.toFixed(2)}`);
-        }
-
-        // Save to localStorage
-        savePortfolio();
+        // Save transactions
         saveTransactions();
+
+        // Ricalcola costBasisEUR, originalQty, avgPriceEUR dalle transazioni
+        // Single source of truth!
+        recalculateFromTransactions();
 
         // Regenerate historical snapshots
         generateAndSaveHistoricalSnapshots();
@@ -919,7 +906,8 @@ const UI = {
         // Close modal
         this.hideModal('addTransactionModal');
 
-        this.showToast(`Acquisto ${qty.toFixed(2)} ${symbol} salvato!`, 'success');
+        const totalCost = qty * priceEUR;
+        this.showToast(`Acquisto ${qty.toFixed(2)} ${symbol} (€${totalCost.toFixed(2)}) salvato!`, 'success');
     }
 };
 

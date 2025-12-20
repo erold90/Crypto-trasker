@@ -102,20 +102,14 @@ const CONFIG = {
         { id: 15, date: '2025-11-22', type: 'BUY', asset: 'QNT', qty: 1, priceEUR: 13.00, note: 'Uphold - Test QNT' }
     ],
     
-    // Default Portfolio (calcolato da transazioni reali)
-    // costBasisEUR = costo totale investito in EUR
-    // avgPriceEUR = prezzo medio di acquisto in EUR
-    // originalQty = quantità originale comprata (per calcolo P&L)
+    // Default Portfolio (solo struttura base - i valori vengono calcolati da TRANSACTIONS)
     // qty = quantità attuale (aggiornata da wallet sync)
+    // costBasisEUR, avgPriceEUR, originalQty = calcolati automaticamente da recalculateFromTransactions()
     DEFAULT_PORTFOLIO: [
-        // XRP: €5689.54 investiti per 10083.08 XRP = €0.5643/XRP
-        { symbol: 'XRP', name: 'XRP', qty: 10001.87, originalQty: 10083.08, avgPriceEUR: 0.5643, costBasisEUR: 5689.54 },
-        // QNT: €5432 investiti per 60.67 QNT = €89.54/QNT
-        { symbol: 'QNT', name: 'Quant', qty: 70.04, originalQty: 60.67, avgPriceEUR: 89.54, costBasisEUR: 5432 },
-        // HBAR: €6780 investiti per 40005.10 HBAR = €0.1695/HBAR
-        { symbol: 'HBAR', name: 'Hedera', qty: 40082.41, originalQty: 40005.10, avgPriceEUR: 0.1695, costBasisEUR: 6780 },
-        // XDC: €6749 investiti per 100211.82 XDC = €0.0674/XDC
-        { symbol: 'XDC', name: 'XDC Network', qty: 100402.25, originalQty: 100211.82, avgPriceEUR: 0.0674, costBasisEUR: 6749 }
+        { symbol: 'XRP', name: 'XRP', qty: 10001.87 },
+        { symbol: 'QNT', name: 'Quant', qty: 70.04 },
+        { symbol: 'HBAR', name: 'Hedera', qty: 40082.41 },
+        { symbol: 'XDC', name: 'XDC Network', qty: 100402.25 }
     ],
     
     // LocalStorage Keys
@@ -191,75 +185,64 @@ const state = {
 // STORAGE FUNCTIONS
 // ============================================
 
-function sanitizePortfolio(portfolio) {
-    // Fix corrupted data (strings instead of numbers)
-    let needsSave = false;
-    portfolio.forEach(asset => {
-        const savedQty = asset.qty;
-        asset.qty = parseFloat(asset.qty) || 0;
+// Ricalcola costBasisEUR, originalQty, avgPriceEUR dalle transazioni
+// QUESTA È LA SINGLE SOURCE OF TRUTH per i costi
+function recalculateFromTransactions() {
+    console.log('📊 Ricalcolo portfolio da transazioni...');
 
-        // Get defaults for this asset
-        const defaultAsset = CONFIG.DEFAULT_PORTFOLIO.find(d => d.symbol === asset.symbol);
+    state.portfolio.forEach(asset => {
+        // Trova tutte le transazioni BUY per questo asset
+        const buyTxs = state.transactions.filter(
+            tx => tx.asset === asset.symbol && tx.type === 'BUY'
+        );
 
-        // Ensure costBasisEUR exists (copy from defaults if missing)
-        if (asset.costBasisEUR === undefined || asset.costBasisEUR === null) {
-            if (defaultAsset && defaultAsset.costBasisEUR) {
-                asset.costBasisEUR = defaultAsset.costBasisEUR;
-                needsSave = true;
-                console.log(`Added costBasisEUR for ${asset.symbol}: €${asset.costBasisEUR}`);
-            }
-        } else {
-            asset.costBasisEUR = parseFloat(asset.costBasisEUR) || 0;
+        if (buyTxs.length === 0) {
+            console.warn(`${asset.symbol}: Nessuna transazione BUY trovata`);
+            return;
         }
 
-        // Ensure avgPriceEUR exists
-        if (asset.avgPriceEUR === undefined || asset.avgPriceEUR === null) {
-            if (defaultAsset && defaultAsset.avgPriceEUR) {
-                asset.avgPriceEUR = defaultAsset.avgPriceEUR;
-                needsSave = true;
-                console.log(`Added avgPriceEUR for ${asset.symbol}: €${asset.avgPriceEUR}`);
-            }
-        } else {
-            asset.avgPriceEUR = parseFloat(asset.avgPriceEUR) || 0;
-        }
+        // Calcola totali
+        let totalQty = 0;
+        let totalCostEUR = 0;
 
-        // Ensure originalQty exists (copy from defaults if missing)
-        // originalQty is the amount we originally bought - never changes with wallet sync
-        if (asset.originalQty === undefined || asset.originalQty === null) {
-            if (defaultAsset && defaultAsset.originalQty) {
-                asset.originalQty = defaultAsset.originalQty;
-                needsSave = true;
-                console.log(`Added originalQty for ${asset.symbol}: ${asset.originalQty}`);
-            } else {
-                // Fallback: use current qty as original
-                asset.originalQty = asset.qty;
-                needsSave = true;
-            }
-        } else {
-            asset.originalQty = parseFloat(asset.originalQty) || 0;
-        }
+        buyTxs.forEach(tx => {
+            const qty = parseFloat(tx.qty) || 0;
+            const price = parseFloat(tx.priceEUR) || parseFloat(tx.price) || 0;
+            totalQty += qty;
+            totalCostEUR += qty * price;
+        });
 
-        if (savedQty !== asset.qty) {
-            needsSave = true;
-            console.warn(`Fixed corrupted qty for ${asset.symbol}: ${savedQty}->${asset.qty}`);
-        }
+        // Aggiorna asset
+        asset.originalQty = totalQty;
+        asset.costBasisEUR = totalCostEUR;
+        asset.avgPriceEUR = totalQty > 0 ? totalCostEUR / totalQty : 0;
+
+        // Calcola differenza con wallet
+        const walletDiff = (asset.qty || 0) - totalQty;
+
+        console.log(`${asset.symbol}: ${buyTxs.length} tx, ${totalQty.toFixed(2)} comprati, €${totalCostEUR.toFixed(2)} investiti, avg €${asset.avgPriceEUR.toFixed(4)}${walletDiff > 0.01 ? `, +${walletDiff.toFixed(2)} non registrati` : ''}`);
     });
-    return needsSave;
+
+    // Salva portfolio aggiornato
+    savePortfolio();
 }
 
 function loadFromStorage() {
     try {
-        // Load portfolio
+        // Load portfolio (solo qty viene da localStorage/wallet sync)
         const savedPortfolio = localStorage.getItem(CONFIG.STORAGE.PORTFOLIO);
-        state.portfolio = savedPortfolio
-            ? JSON.parse(savedPortfolio)
-            : JSON.parse(JSON.stringify(CONFIG.DEFAULT_PORTFOLIO));
-
-        // Sanitize portfolio data (fix any corrupted values)
-        const needsSave = sanitizePortfolio(state.portfolio);
-        if (needsSave) {
-            localStorage.setItem(CONFIG.STORAGE.PORTFOLIO, JSON.stringify(state.portfolio));
-            console.log('Portfolio data sanitized and saved');
+        if (savedPortfolio) {
+            const saved = JSON.parse(savedPortfolio);
+            // Usa DEFAULT_PORTFOLIO come base, poi applica qty salvate
+            state.portfolio = CONFIG.DEFAULT_PORTFOLIO.map(defaultAsset => {
+                const savedAsset = saved.find(s => s.symbol === defaultAsset.symbol);
+                return {
+                    ...defaultAsset,
+                    qty: savedAsset ? parseFloat(savedAsset.qty) || defaultAsset.qty : defaultAsset.qty
+                };
+            });
+        } else {
+            state.portfolio = JSON.parse(JSON.stringify(CONFIG.DEFAULT_PORTFOLIO));
         }
 
         // Load transactions
@@ -267,6 +250,10 @@ function loadFromStorage() {
         state.transactions = savedTx
             ? JSON.parse(savedTx)
             : JSON.parse(JSON.stringify(CONFIG.TRANSACTIONS));
+
+        // RICALCOLA costBasisEUR, originalQty, avgPriceEUR dalle transazioni
+        // Questa è la single source of truth
+        recalculateFromTransactions();
 
         // Load targets
         const savedTargets = localStorage.getItem(CONFIG.STORAGE.TARGETS);
@@ -645,6 +632,7 @@ window.CONFIG = CONFIG;
 window.state = state;
 window.savePortfolio = savePortfolio;
 window.saveTransactions = saveTransactions;
+window.recalculateFromTransactions = recalculateFromTransactions;
 window.saveTargets = saveTargets;
 window.saveSettings = saveSettings;
 window.savePortfolioSnapshot = savePortfolioSnapshot;
