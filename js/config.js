@@ -9,10 +9,11 @@ const CONFIG = {
     USE_PROXY: window.location.hostname !== 'erold90.github.io',  // Auto-detect: use proxy except on GitHub Pages
 
     // Direct API endpoints (used when USE_PROXY is false on GitHub Pages)
-    // WARNING: API keys are exposed in frontend when using direct mode
+    // WARNING: API keys must be configured by the user
     // For secure deployment, use Vercel with proxy (USE_PROXY = true)
-    API_KEY: "a]5L2X5L0]9C5]0F7]9H9B2]4G0G4D3E7C3]3D8]6G",  // CryptoCompare (encoded)
-    ETHERSCAN_API_KEY: "X5NADVXS5711WTDXEQIAY34WJ1HXAGA5FE",  // Etherscan (free tier)
+    // API keys are stored in localStorage after first setup
+    API_KEY: localStorage.getItem('cpt_cryptocompare_key') || "",  // CryptoCompare - configure via settings
+    ETHERSCAN_API_KEY: localStorage.getItem('cpt_etherscan_key') || "",  // Etherscan - configure via settings
 
     APIS: {
         // Proxy endpoints (secure - API keys stored on server)
@@ -616,9 +617,60 @@ function showDebugPanel() {
     document.body.insertAdjacentHTML('beforeend', html);
 }
 
+// ============================================
+// API KEYS SETUP
+// ============================================
+
+// Check and prompt for API keys if needed (for GitHub Pages direct mode)
+function checkApiKeys() {
+    if (CONFIG.USE_PROXY) {
+        // Using Vercel proxy, keys are on server
+        return true;
+    }
+
+    if (!CONFIG.API_KEY || !CONFIG.ETHERSCAN_API_KEY) {
+        console.warn('⚠️ API keys not configured. Some features may not work.');
+        console.log('💡 To configure: open console and run setupApiKeys()');
+        return false;
+    }
+    return true;
+}
+
+// Setup API keys (call from console or settings page)
+function setupApiKeys() {
+    const cryptoKey = prompt('Inserisci la tua CryptoCompare API Key (https://www.cryptocompare.com/cryptopian/api-keys):');
+    if (cryptoKey) {
+        localStorage.setItem('cpt_cryptocompare_key', cryptoKey);
+        CONFIG.API_KEY = cryptoKey;
+    }
+
+    const etherscanKey = prompt('Inserisci la tua Etherscan API Key (https://etherscan.io/myapikey):');
+    if (etherscanKey) {
+        localStorage.setItem('cpt_etherscan_key', etherscanKey);
+        CONFIG.ETHERSCAN_API_KEY = etherscanKey;
+    }
+
+    if (cryptoKey || etherscanKey) {
+        console.log('✅ API keys salvate! Ricarica la pagina.');
+        location.reload();
+    }
+}
+
+// Clear API keys
+function clearApiKeys() {
+    localStorage.removeItem('cpt_cryptocompare_key');
+    localStorage.removeItem('cpt_etherscan_key');
+    console.log('🗑️ API keys rimosse. Ricarica la pagina.');
+}
+
+// Check on load
+setTimeout(checkApiKeys, 1000);
+
 // Export
 window.CONFIG = CONFIG;
 window.state = state;
+window.setupApiKeys = setupApiKeys;
+window.clearApiKeys = clearApiKeys;
 window.savePortfolio = savePortfolio;
 window.saveTransactions = saveTransactions;
 window.recalculateFromTransactions = recalculateFromTransactions;
